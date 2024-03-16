@@ -1,0 +1,17 @@
+version: '3'
+
+services:
+  myzerotier:
+    image: zerotier/zerotier:latest
+    command: ${zerotier_network}
+    container_name: myzerotier
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    devices:
+      - /dev/net/tun
+    volumes:
+      - /opt/docker/data/zerotier:/var/lib/zerotier-one
+    network_mode: host
+    restart: unless-stopped
+    
