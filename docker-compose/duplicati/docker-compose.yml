@@ -12,7 +12,7 @@ services:
     volumes:
       - /opt/docker/data/duplicati/config:/config
       - /opt/docker/data/duplicati/backups:/backups
-      - /opt/docker/data/duplicati/source:/source
+      - /opt/docker/data:/source
     ports:
       - 8200:8200
     restart: unless-stopped
