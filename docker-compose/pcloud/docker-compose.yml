@@ -1,0 +1,21 @@
+version: '3.7'
+
+services:
+  pcloud:
+    build: .
+    volumes:
+      - pcloud_data:/mnt/pcloud
+    cap_add:
+      - SYS_ADMIN
+    devices:
+      - /dev/fuse
+    security_opt:
+      - apparmor:unconfined
+    environment:
+      - PCLOUD_USERNAME=${PCLOUD_USERNAME}
+      - PCLOUD_PASSWORD=${PCLOUD_PASSWORD}
+    entrypoint: ["/entrypoint.sh"]
+
+volumes:
+  pcloud_data:
+    driver: local
