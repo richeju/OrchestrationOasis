@@ -35,8 +35,6 @@ RUN mknod /dev/fuse -m 666 c 10 229
 ENV PCLOUD_USERNAME=""
 ENV PCLOUD_PASSWORD=""
 
-RUN mkdir -p /mnt/pcloud
-
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
