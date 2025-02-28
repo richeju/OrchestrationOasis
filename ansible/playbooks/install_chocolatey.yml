@@ -1,4 +1,4 @@
-- name: Install Chocolatey on Windows
+- name: install Chocolatey on Windows
   hosts: windows
   gather_facts: no
   become: no
