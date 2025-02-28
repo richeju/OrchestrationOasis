@@ -1,0 +1,26 @@
+name: Check Gitmojis in Commit Messages
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  check-gitmoji:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify Gitmojis in Commits
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const commits = await github.rest.pulls.listCommits({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+            commits.data.forEach(commit => {
+              const message = commit.commit.message;
+              if (!message.match(/:[a-zA-Z]+:/)) {
+                core.setFailed(`The commit message "${message}" does not contain a gitmoji.`);
+              }
+            });
