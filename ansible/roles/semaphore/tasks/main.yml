@@ -1,0 +1,26 @@
+---
+- name: Create main folder for Semaphore
+  ansible.builtin.file:
+    path: "{{ semaphore_data_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Create subfolder for volumes
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ semaphore_data_dir }}/mysql-data"
+    - "{{ semaphore_data_dir }}/config"
+
+- name: Generate Docker Compose
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ semaphore_data_dir }}/docker-compose.yml"
+    mode: '0644'
+
+- name: Start Semaphore with Docker Compose
+  ansible.builtin.command: docker compose up -d
+  args:
+    chdir: "{{ semaphore_data_dir }}"
