@@ -1,6 +1,6 @@
 ---
 - name: Create main folder for Semaphore
-  file:
+  ansible.builtin.file:
     path: "{{ semaphore_data_dir }}"
     state: directory
     mode: '0755'
