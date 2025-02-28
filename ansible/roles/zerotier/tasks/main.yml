@@ -1,0 +1,23 @@
+---
+- name: Create ZeroTier service directory on target host
+  ansible.builtin.file:
+    path: "{{ zerotier_service_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Create ZeroTier data directory on target host
+  ansible.builtin.file:
+    path: "{{ zerotier_data_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Generate Docker Compose file for ZeroTier
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ zerotier_service_dir }}/docker-compose.yml"
+    mode: '0644'
+
+- name: Start Docker Compose services
+  community.docker.docker_compose:
+    project_src: "{{ zerotier_service_dir }}"
+    state: present
