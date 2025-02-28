@@ -17,7 +17,7 @@
     dest: "{{ zerotier_service_dir }}/docker-compose.yml"
     mode: '0644'
 
-- name: Start ZeroTier service
-  ansible.builtin.command: docker compose up -d
-  args:
-    chdir: "{{ zerotier_service_dir }}"
+- name: Start Docker Compose services
+  community.docker.docker_compose:
+    project_src: "{{ zerotier_service_dir }}"
+    state: present
