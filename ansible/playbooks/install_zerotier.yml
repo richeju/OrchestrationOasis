@@ -1,5 +1,5 @@
 ---
-- name: Deploy ZeroTier with Docker Compose
+- name: install ZeroTier with Docker Compose
   hosts: all
   become: yes
   roles:
