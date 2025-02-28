@@ -1,5 +1,5 @@
 ---
-- name: installer Ansible Semaphore avec Docker Compose
+- name: Install Ansible Semaphore with Docker Compose
   hosts: all
   become: yes
   roles:
