@@ -1,0 +1,6 @@
+- name: Install Chocolatey on Windows
+  hosts: windows
+  gather_facts: no
+  become: no
+  roles:
+    - chocolatey
