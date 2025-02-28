@@ -1,0 +1,52 @@
+# ansible/roles/docker/tasks/main.yml
+---
+- name: Update apt cache and install prerequisites
+  apt:
+    update_cache: yes
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+
+- name: Add Docker GPG key
+  apt_key:
+    url: https://download.docker.com/linux/debian/gpg
+    state: present
+
+- name: Add Docker repository
+  apt_repository:
+    repo: "deb [arch=amd64] https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable"
+    state: present
+    filename: docker
+    update_cache: yes
+
+- name: Install Docker packages
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+
+- name: Enable and start Docker service
+  systemd:
+    name: docker
+    enabled: yes
+    state: started
+
+- name: Add user to docker group
+  user:
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: yes
+  when: ansible_user is defined
+
+- name: Install docker-compose
+  get_url:
+    url: https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-x86_64
+    dest: /usr/local/bin/docker-compose
+    mode: '0755'
