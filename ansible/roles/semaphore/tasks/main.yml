@@ -21,6 +21,9 @@
     mode: '0644'
 
 - name: Start Semaphore with Docker Compose
-  ansible.builtin.command: docker compose up -d
-  args:
-    chdir: "{{ semaphore_data_dir }}"
+  community.docker.docker_compose:
+    project_src: "{{ semaphore_data_dir }}"
+    state: present
+    build: no
+    pull: yes
+    recreate: smart
