@@ -13,14 +13,34 @@ jobs:
         uses: actions/github-script@v6
         with:
           script: |
+            // List of valid Gitmoji text formats
+            const validGitmojiText = [
+              ':bug:', ':sparkles:', ':memo:', ':rocket:', ':fire:', 
+              ':lipstick:', ':art:', ':zap:', ':white_check_mark:', ':lock:',
+              ':package:', ':page_facing_up:', ':construction:', ':bookmark:',
+              ':wrench:', ':globe_with_meridians:', ':speech_balloon:'
+            ];
+            // List of corresponding emoji formats (optional, for robustness)
+            const validGitmojiEmojis = [
+              '🐛', '✨', '📝', '🚀', '🔥', '💄', '🎨', '⚡️', '✅', '🔒', 
+              '📦', '📄', '🚧', '🔖', '🔧', '🌐', '💬'
+            ];
+
+            // Fetch commits from the PR
             const commits = await github.rest.pulls.listCommits({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.issue.number
             });
+
+            // Check each commit message
             commits.data.forEach(commit => {
               const message = commit.commit.message;
-              if (!message.match(/:[a-zA-Z]+:/)) {
-                core.setFailed(`The commit message "${message}" does not contain a gitmoji.`);
+              const startsWithGitmojiText = validGitmojiText.some(gitmoji => message.startsWith(gitmoji));
+              const startsWithGitmojiEmoji = validGitmojiEmojis.some(emoji => message.startsWith(emoji));
+
+              // Fail if no valid Gitmoji (text or emoji) is found
+              if (!startsWithGitmojiText && !startsWithGitmojiEmoji) {
+                core.setFailed(`The commit message "${message}" does not contain a valid Gitmoji.`);
               }
             });
