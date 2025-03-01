@@ -1,2 +1,2 @@
 # Gitmoji Usage in This Repository
-Repo uses [Gitmoji](https://gitmoji.dev/)
+Repository uses [Gitmoji](https://gitmoji.dev/)
