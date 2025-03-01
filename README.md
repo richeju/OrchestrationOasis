@@ -1,2 +1,1 @@
-Repo uses https://gitmoji.dev/
-test
+Repo uses [Gitmoji](https://gitmoji.dev/)
