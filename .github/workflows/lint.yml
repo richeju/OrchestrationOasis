@@ -13,15 +13,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Check GitHub token
-        run: |
-          if [ -z "${{ secrets.GITHUB_TOKEN }}" ]; then
-            echo "Error: GITHUB_TOKEN is empty or undefined."
-            exit 1
-          else
-            echo "GITHUB_TOKEN is defined (value masked for security reasons)."
-          fi
-
       - name: Run Super-Linter
         uses: super-linter/super-linter@v5
         env:
