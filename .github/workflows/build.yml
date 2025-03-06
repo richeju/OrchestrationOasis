@@ -1,15 +1,30 @@
-name: Build Docker Images
+name: Build Services
+
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - heimdall
+          - uptime-kuma
+          - duplicati
+          - jdownloader
     steps:
-    - uses: actions/checkout@v3
-    - name: Build Heimdall
-      run: docker-compose -f docker-compose/heimdall/docker-compose.yml build
-    - name: Build Uptime Kuma
-      run: docker-compose -f docker-compose/uptime-kuma/docker-compose.yml build
+      # Étape 1 : Get the code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Étape 2 : Configure Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Étape 3 : Build each service
+      - name: Build ${{ matrix.service }} Docker Image
+        run: docker compose -f docker-compose/${{ matrix.service }}/docker-compose.yml build
