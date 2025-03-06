@@ -1,0 +1,15 @@
+name: Build Docker Images
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build Heimdall
+      run: docker-compose -f docker-compose/heimdall/docker-compose.yml build
+    - name: Build Uptime Kuma
+      run: docker-compose -f docker-compose/uptime-kuma/docker-compose.yml build
