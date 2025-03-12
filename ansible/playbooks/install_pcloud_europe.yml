@@ -1,6 +1,5 @@
----
-- name: Configure pCloud WebDAV for Europe
+- name: Configure pCloud WebDAV
   hosts: all
   become: yes
   roles:
-    - pcloud_europe
+    - pcloud
