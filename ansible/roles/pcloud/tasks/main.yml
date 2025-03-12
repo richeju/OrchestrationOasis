@@ -1,0 +1,44 @@
+---
+- name: Install davfs2
+  ansible.builtin.apt:
+    name: davfs2
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Create pcloud_users group
+  ansible.builtin.group:
+    name: "{{ pcloud_group }}"
+    state: present
+  become: yes
+
+- name: Créer mountpoint
+  ansible.builtin.file:
+    path: "{{ pcloud_mount_point }}"
+    state: directory
+    mode: '0770'
+    owner: root
+    group: "{{ pcloud_group }}"
+  become: yes
+
+- name: Configure credentials file
+  ansible.builtin.template:
+    src: pcloud_credentials.j2
+    dest: "{{ pcloud_cred_file }}"
+    mode: '0600'
+    owner: root
+    group: root
+  become: yes
+
+- name: Add entry in /etc/fstab for pCloud Europe
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    line: "{{ pcloud_webdav_url }} {{ pcloud_mount_point }} davfs rw,uid=0,gid={{ pcloud_group }},_netdev 0 0"
+    state: present
+  become: yes
+
+- name: Mount pCloud
+  ansible.builtin.command: mount {{ pcloud_mount_point }}
+  become: yes
+  changed_when: false
+  failed_when: false
