@@ -1,0 +1,5 @@
+- name: Install rclone
+  hosts: all
+  become: yes
+  roles:
+    - rclone
