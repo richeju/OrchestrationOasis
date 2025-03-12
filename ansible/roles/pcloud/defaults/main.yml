@@ -1,0 +1,16 @@
+---
+# URL WebDAV Europe
+pcloud_webdav_url: "https://ewebdav.pcloud.com/"
+
+# Mountpoint on the serveur
+pcloud_mount_point: "/mnt/pcloud"
+
+# File for creds
+pcloud_cred_file: "/etc/davfs2/secrets"
+
+# Group for permissions
+pcloud_group: "pcloud_users"
+
+# Pcloud Creds
+pcloud_username: ""
+pcloud_password: ""
