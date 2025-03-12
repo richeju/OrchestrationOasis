@@ -1,18 +1,25 @@
 ---
-- name: Install davfs2
+- name: Install rclone
   ansible.builtin.apt:
-    name: davfs2
+    name: rclone
     state: present
     update_cache: yes
+  become: yes
+
+- name: Install fuse for rclone
+  ansible.builtin.apt:
+    name: fuse
+    state: present
   become: yes
 
 - name: Create pcloud_users group
   ansible.builtin.group:
     name: "{{ pcloud_group }}"
+    gid: "{{ pcloud_gid }}"
     state: present
   become: yes
 
-- name: Créer mountpoint
+- name: Create mountpoint
   ansible.builtin.file:
     path: "{{ pcloud_mount_point }}"
     state: directory
@@ -21,24 +28,50 @@
     group: "{{ pcloud_group }}"
   become: yes
 
-- name: Configure credentials file
+- name: Create directory for rclone config
+  ansible.builtin.file:
+    path: "/etc/rclone"
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+  become: yes
+
+- name: Configure rclone credentials file
   ansible.builtin.template:
-    src: pcloud_credentials.j2
-    dest: "{{ pcloud_cred_file }}"
+    src: rclone.conf.j2
+    dest: "{{ pcloud_config_file }}"
     mode: '0600'
     owner: root
     group: root
   become: yes
 
-- name: Add entry in /etc/fstab for pCloud Europe
-  ansible.builtin.lineinfile:
-    path: /etc/fstab
-    line: "{{ pcloud_webdav_url }} {{ pcloud_mount_point }} davfs rw,uid=0,gid={{ pcloud_group }},_netdev 0 0"
-    state: present
+- name: Create log file for rclone
+  ansible.builtin.file:
+    path: "{{ pcloud_log_file }}"
+    state: touch
+    mode: '0644'
+    owner: root
+    group: root
   become: yes
 
-- name: Mount pCloud
-  ansible.builtin.command: mount {{ pcloud_mount_point }}
+- name: Generate rclone-pcloud systemd service
+  ansible.builtin.template:
+    src: rclone-pcloud.service.j2
+    dest: "{{ pcloud_service_file }}"
+    mode: '0644'
+    owner: root
+    group: root
   become: yes
-  changed_when: false
-  failed_when: false
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: yes
+  become: yes
+
+- name: Enable and start rclone-pcloud service
+  ansible.builtin.systemd:
+    name: rclone-pcloud.service
+    enabled: yes
+    state: started
+  become: yes
