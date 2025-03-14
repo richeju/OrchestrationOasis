@@ -18,6 +18,6 @@ pcloud_rclone_options:
   - "--dir-perms 0770"
   - "--vfs-cache-mode writes"
   - "--vfs-cache-max-size 50G"
-  - "--dir-cache-time 5s"
+  - "--dir-cache-time 5m"
   - "--log-level INFO"
   - "--log-file {{ pcloud_log_file }}"
