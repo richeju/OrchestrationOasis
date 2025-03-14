@@ -26,7 +26,8 @@ check_debian() {
 
 check_internet() {
     echo "Checking Internet connection (port 443)..."
-    if ! curl -s --head https://github.com | grep "200 OK" > /dev/null; then
+    HTTP_STATUS=$(curl -s --output /dev/null --write-out "%{http_code}" https://github.com)
+    if [ "$HTTP_STATUS" -ne 200 ]; then
         echo "Error: Outgoing Internet connection (port 443) is not available. Check your network."
         exit 1
     fi
@@ -35,17 +36,17 @@ check_internet() {
 check_resources() {
     echo "Checking minimum resource requirements..."
     CPU_CORES=$(nproc)
-    RAM_MB=$(free -h | grep "Mem:" | awk '{print $2}' | sed 's/G//;s/M//')
-    DISK_GB=$(df -h / | tail -n1 | awk '{print $4}' | sed 's/G//;s/M//')
+    RAM_MB=$(free -m | grep "Mem:" | awk '{print $2}')  # Use free -m for raw MB
+    DISK_GB=$(df -m / | tail -n1 | awk '{print $4}')     # Use df -m for MB, compare as MB for 14GB
 
     if [ "$CPU_CORES" -lt 2 ]; then
         echo "Error: Less than 2 CPU cores detected. The runner requires at least 2 cores."
         exit 1
     fi
-    if [ "$RAM_MB" -lt 7000 ] && [ "$RAM_MB" -gt 0 ]; then
+    if [ "$RAM_MB" -lt 7000 ]; then
         echo "Warning: Less than 7 GB of RAM detected. The runner may be slow."
     fi
-    if [ "$DISK_GB" -lt 14 ]; then
+    if [ "$DISK_GB" -lt 14000 ]; then  # 14 GB in MB
         echo "Error: Less than 14 GB of disk space available. The runner requires at least 14 GB."
         exit 1
     fi
@@ -63,7 +64,7 @@ create_user() {
 
 install_dependencies() {
     echo "Installing dependencies..."
-    apt update && apt install -y curl unzip libicu70 libssl1.1
+    apt update && apt install -y curl unzip libicu72 libssl3
     # Adjust libicu based on your Debian version (e.g., libicu72 for Debian 12)
     if [ $? -ne 0 ]; then
         echo "Error: Failed to install dependencies."
@@ -144,4 +145,4 @@ configure_runner
 setup_service
 test_runner
 
-echo "GitHub self-hosted runner installation completed successfully!"
+echo "GitHub self-hosted runner
