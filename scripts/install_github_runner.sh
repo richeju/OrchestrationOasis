@@ -38,7 +38,8 @@ check_debian() {
 check_internet() {
     echo "Checking Internet connection (port 443)..."
     HTTP_STATUS=$(curl -s --output /dev/null --write-out "%{http_code}" https://github.com)
-    if ! [[ "$HTTP_STATUS" =~ ^[0-9]+$ ]]; then
+    # Check if HTTP_STATUS is a number using expr
+    if [ -z "$HTTP_STATUS" ] || [ "$(expr "$HTTP_STATUS" : '[0-9]*$')" -eq 0 ]; then
         echo "Error: Invalid HTTP status code returned. Check your network or curl installation."
         exit 1
     fi
@@ -54,20 +55,20 @@ check_resources() {
     RAM_MB=$(free -m | grep "Mem:" | awk '{print $2}')  # Use free -m for raw MB
     DISK_MB=$(df -m / | tail -n1 | awk '{print $4}')     # Use df -m for MB
 
-    # Verify that CPU_CORES is a number
-    if ! [[ "$CPU_CORES" =~ ^[0-9]+$ ]]; then
+    # Check if CPU_CORES is a number using expr
+    if [ -z "$CPU_CORES" ] || [ "$(expr "$CPU_CORES" : '[0-9]*$')" -eq 0 ]; then
         echo "Error: Invalid CPU cores value detected."
         exit 1
     fi
 
-    # Verify that RAM_MB is a number
-    if ! [[ "$RAM_MB" =~ ^[0-9]+$ ]]; then
+    # Check if RAM_MB is a number using expr
+    if [ -z "$RAM_MB" ] || [ "$(expr "$RAM_MB" : '[0-9]*$')" -eq 0 ]; then
         echo "Error: Invalid RAM value detected."
         exit 1
     fi
 
-    # Verify that DISK_MB is a number
-    if ! [[ "$DISK_MB" =~ ^[0-9]+$ ]]; then
+    # Check if DISK_MB is a number using expr
+    if [ -z "$DISK_MB" ] || [ "$(expr "$DISK_MB" : '[0-9]*$')" -eq 0 ]; then
         echo "Error: Invalid disk space value detected."
         exit 1
     fi
