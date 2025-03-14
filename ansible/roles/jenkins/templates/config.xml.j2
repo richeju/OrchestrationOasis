@@ -1,0 +1,52 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<hudson>
+  <disabledAdministrativeMonitors/>
+  <version>2.440.3</version> <!-- Version peut varier, à ajuster -->
+  <numExecutors>2</numExecutors>
+  <mode>NORMAL</mode>
+  <useSecurity>true</useSecurity>
+  <authorizationStrategy class="hudson.security.FullControlOnceLoggedInAuthorizationStrategy">
+    <denyAnonymousReadAccess>true</denyAnonymousReadAccess>
+  </authorizationStrategy>
+  <securityRealm class="hudson.security.GitHubAuthenticationRealm">
+    <clientID>YOUR_GITHUB_APP_CLIENT_ID</clientID> <!-- Optionnel, si OAuth -->
+    <clientSecret>YOUR_GITHUB_APP_CLIENT_SECRET</clientSecret> <!-- Optionnel -->
+    <oauthScopes>repo,user:email</oauthScopes>
+  </securityRealm>
+  <clouds/>
+  <slaveAgentPort>50000</slaveAgentPort>
+  <label></label>
+  <crumbIssuer class="hudson.security.csrf.DefaultCrumbIssuer"/>
+  <quietPeriod>5</quietPeriod>
+  <scmCheckoutRetryCount>0</scmCheckoutRetryCount>
+  <views>
+    <hudson.model.AllView>
+      <owner class="hudson" reference="../../.."/>
+      <name>all</name>
+    </hudson.model.AllView>
+  </views>
+  <credentialsStore class="com.cloudbees.plugins.credentials.SystemCredentialsProvider$StoreImpl">
+    <domainCredentialsMap class="hudson.util.CopyOnWriteMap$Hash">
+      <entry>
+        <com.cloudbees.plugins.credentials.domains.Domain>
+          <specifications/>
+        </com.cloudbees.plugins.credentials.domains.Domain>
+        <java.util.concurrent.CopyOnWriteArrayList>
+          <com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl>
+            <scope>GLOBAL</scope>
+            <id>github-token</id>
+            <username>your-github-username</username>
+            <password>{{ github_token }}</password>
+            <description>GitHub Personal Access Token</description>
+          </com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl>
+        </java.util.concurrent.CopyOnWriteArrayList>
+      </entry>
+    </domainCredentialsMap>
+  </credentialsStore>
+  <globalLibraries>
+    <libraries/>
+  </globalLibraries>
+  <primaryView>all</primaryView>
+  <remotingSecurity class="org.jenkinsci.main.modules.instance_identity.InstanceIdentityKeyStoreProvider"/>
+  <disableRememberMe>false</disableRememberMe>
+</hudson>
