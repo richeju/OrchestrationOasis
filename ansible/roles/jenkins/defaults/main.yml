@@ -1,0 +1,5 @@
+---
+jenkins_service_dir: "/opt/jenkins"
+jenkins_data_dir: "/var/jenkins_home"
+jenkins_port: "8080"
+github_token: "{{ vault_github_token }}"
