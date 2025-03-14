@@ -1,0 +1,15 @@
+[Unit]
+Description=rclone mount for pCloud
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/rclone mount pcloud: {{ pcloud_mount_point }} {{ pcloud_rclone_options | join(' ') }}
+ExecStop=/bin/fusermount -u {{ pcloud_mount_point }}
+Restart=on-failure
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target

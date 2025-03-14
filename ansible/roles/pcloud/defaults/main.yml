@@ -1,16 +1,23 @@
 ---
-# URL WebDAV Europe
-pcloud_webdav_url: "https://ewebdav.pcloud.com/"
-
-# Mountpoint on the serveur
+pcloud_webdav_url: "https://ewebdav.pcloud.com"
 pcloud_mount_point: "/mnt/pcloud"
-
-# File for creds
-pcloud_cred_file: "/etc/davfs2/secrets"
-
-# Group for permissions
+pcloud_config_file: "/etc/rclone/rclone.conf"
+pcloud_log_file: "/var/log/rclone.log"
+pcloud_service_file: "/etc/systemd/system/rclone-pcloud.service"
 pcloud_group: "pcloud_users"
+pcloud_gid: "1001"
 
-# Pcloud Creds
+# Credentials pCloud (needs obfuscation with `rclone obscure`)
 pcloud_username: ""
-pcloud_password: ""
+pcloud_password_obscured: ""
+pcloud_rclone_options:
+  - "--allow-other"
+  - "--uid 0"
+  - "--gid {{ pcloud_gid }}"
+  - "--file-perms 0660"
+  - "--dir-perms 0770"
+  - "--vfs-cache-mode writes"
+  - "--vfs-cache-max-size 50G"
+  - "--dir-cache-time 5m"
+  - "--log-level INFO"
+  - "--log-file {{ pcloud_log_file }}"
