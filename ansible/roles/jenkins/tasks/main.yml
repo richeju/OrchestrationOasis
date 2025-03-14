@@ -23,3 +23,46 @@
     state: present
     pull: yes
     recreate: smart
+
+- name: Wait for Jenkins to be ready
+  ansible.builtin.wait_for:
+    port: "{{ jenkins_port | int }}"
+    delay: 30
+    timeout: 300
+
+- name: Install required Jenkins plugins
+  jenkins_plugin:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - github
+    - git
+    - workflow-aggregator  # For Jenkins Pipelines
+    - credentials  # Github Tokens
+  become: yes
+  become_user: jenkins
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+
+- name: Configure Jenkins to connect to GitHub
+  ansible.builtin.template:
+    src: config.xml.j2
+    dest: "{{ jenkins_data_dir }}/config.xml"
+    mode: '0644'
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+  notify: Restart Jenkins
+
+- name: Ensure Jenkins is running after configuration
+  community.docker.docker_compose:
+    project_src: "{{ jenkins_service_dir }}"
+    state: present
+    pull: no
+    recreate: smart
+
+  handlers:
+    - name: Restart Jenkins
+      community.docker.docker_compose:
+        project_src: "{{ jenkins_service_dir }}"
+        state: present
+        recreate: smart
