@@ -7,7 +7,8 @@
 RUNNER_VERSION="2.319.0"  # Default version if fetch fails
 RUNNER_DIR="/home/github-runner/actions-runner"
 GITHUB_USER="github-runner"
-GITHUB_REPO="https://github.com/richeju/richeju-orchestrationoasis"  # Replace with your GitHub repository
+GITHUB_REPO="https://github.com/richeju/OrchestrationOasis"  # Replace with your GitHub repository
+GITHUB_PAT=""
 
 # Functions
 get_latest_runner_version() {
@@ -38,15 +39,19 @@ check_debian() {
 check_internet() {
     echo "Checking Internet connection (port 443)..."
     HTTP_STATUS=$(curl -s --output /dev/null --write-out "%{http_code}" https://github.com)
-    # Check if HTTP_STATUS is a number using expr
-    if [ -z "$HTTP_STATUS" ] || [ "$(expr "$HTTP_STATUS" : '[0-9]*$')" -eq 0 ]; then
-        echo "Error: Invalid HTTP status code returned. Check your network or curl installation."
-        exit 1
-    fi
-    if [ "$HTTP_STATUS" -ne 200 ]; then
-        echo "Error: Outgoing Internet connection (port 443) is not available. Check your network."
-        exit 1
-    fi
+    # Check if HTTP_STATUS is empty or not a number using case
+    case "$HTTP_STATUS" in
+        ''|*[!0-9]*) 
+            echo "Error: Invalid HTTP status code returned. Check your network or curl installation."
+            exit 1
+            ;;
+        *)
+            if [ "$HTTP_STATUS" -ne 200 ]; then
+                echo "Error: Outgoing Internet connection (port 443) is not available. Check your network."
+                exit 1
+            fi
+            ;;
+    esac
 }
 
 check_resources() {
