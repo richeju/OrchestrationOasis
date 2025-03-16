@@ -6,17 +6,12 @@ pcloud_service_file: "/etc/systemd/system/rclone-pcloud.service"
 pcloud_group: "pcloud_users"
 pcloud_gid: "1001"
 
-# Token pCloud
-pcloud_token: "TON_TOKEN_API"
-
 pcloud_rclone_options:
   - "--allow-other"
   - "--uid 0"
-  - "--gid {{ pcloud_gid }}"
+  - "--gid 1000"
   - "--file-perms 0660"
   - "--dir-perms 0770"
-  - "--vfs-cache-mode writes"
-  - "--vfs-cache-max-size 50G"
+  - "--vfs-cache-mode off"
   - "--dir-cache-time 5m"
   - "--log-level INFO"
-  - "--log-file {{ pcloud_log_file }}"
