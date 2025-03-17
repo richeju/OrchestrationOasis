@@ -1,5 +1,4 @@
 ---
-pcloud_webdav_url: "https://ewebdav.pcloud.com"
 pcloud_mount_point: "/mnt/pcloud"
 pcloud_config_file: "/etc/rclone/rclone.conf"
 pcloud_log_file: "/var/log/rclone.log"
@@ -7,17 +6,12 @@ pcloud_service_file: "/etc/systemd/system/rclone-pcloud.service"
 pcloud_group: "pcloud_users"
 pcloud_gid: "1001"
 
-# Credentials pCloud (needs obfuscation with `rclone obscure`)
-pcloud_username: ""
-pcloud_password_obscured: ""
 pcloud_rclone_options:
   - "--allow-other"
   - "--uid 0"
-  - "--gid {{ pcloud_gid }}"
+  - "--gid 1000"
   - "--file-perms 0660"
   - "--dir-perms 0770"
-  - "--vfs-cache-mode writes"
-  - "--vfs-cache-max-size 50G"
+  - "--vfs-cache-mode off"
   - "--dir-cache-time 5m"
   - "--log-level INFO"
-  - "--log-file {{ pcloud_log_file }}"

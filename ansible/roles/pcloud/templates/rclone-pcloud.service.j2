@@ -4,12 +4,14 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
+Type=notify
 ExecStart=/usr/bin/rclone mount pcloud: {{ pcloud_mount_point }} {{ pcloud_rclone_options | join(' ') }}
 ExecStop=/bin/fusermount -u {{ pcloud_mount_point }}
+KillMode=process
 Restart=on-failure
 User=root
 Group=root
+TimeoutStopSec=30
 
 [Install]
 WantedBy=multi-user.target
