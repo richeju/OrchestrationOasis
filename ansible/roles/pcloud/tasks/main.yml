@@ -55,6 +55,15 @@
     group: root
   become: yes
 
+- name: Create rclone cache directory
+  ansible.builtin.file:
+    path: "/var/cache/rclone"
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+  become: yes
+
 - name: Generate rclone-pcloud systemd service
   ansible.builtin.template:
     src: rclone-pcloud.service.j2
