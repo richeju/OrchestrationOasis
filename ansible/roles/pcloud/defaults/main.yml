@@ -12,6 +12,7 @@ pcloud_rclone_options:
   - "--gid 1000"
   - "--file-perms 0660"
   - "--dir-perms 0770"
-  - "--vfs-cache-mode off"
+  - "--vfs-cache-mode full"
+  - "--cache-dir /var/cache/rclone"
   - "--dir-cache-time 5m"
   - "--log-level INFO"
