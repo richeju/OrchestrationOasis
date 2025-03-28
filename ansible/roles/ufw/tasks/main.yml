@@ -1,37 +1,37 @@
-name: Install ufw package
-ansible.builtin.apt:
-  name: ufw
-  state: present
-  update_cache: yes
-become: yes
+- name: Install ufw package
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+    update_cache: yes
+  become: yes
 
-name: Allow SSH access
-ansible.builtin.ufw:
-  rule: allow
-  name: OpenSSH
-become: yes
+- name: Allow SSH access
+  ansible.builtin.ufw:
+    rule: allow
+    name: OpenSSH
+  become: yes
 
-name: Allow specific ports (customizable)
-ansible.builtin.ufw:
-  rule: allow
-  port: "{{ item }}"
-  proto: tcp
-loop: "{{ ufw_allowed_ports | default([]) }}"
-become: yes
+- name: Allow specific ports (customizable)
+  ansible.builtin.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop: "{{ ufw_allowed_ports | default([]) }}"
+  become: yes
 
-name: Deny all other incoming traffic by default
-ansible.builtin.ufw:
-  direction: incoming
-  policy: deny
-become: yes
+- name: Deny all other incoming traffic by default
+  ansible.builtin.ufw:
+    direction: incoming
+    policy: deny
+  become: yes
 
-name: Allow all outgoing traffic
-ansible.builtin.ufw:
-  direction: outgoing
-  policy: allow
-become: yes
+- name: Allow all outgoing traffic
+  ansible.builtin.ufw:
+    direction: outgoing
+    policy: allow
+  become: yes
 
-name: Enable ufw
-ansible.builtin.ufw:
-  state: enabled
-become: yes
+- name: Enable ufw
+  ansible.builtin.ufw:
+    state: enabled
+  become: yes
