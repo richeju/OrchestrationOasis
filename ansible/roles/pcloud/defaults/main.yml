@@ -6,6 +6,10 @@ pcloud_service_file: "/etc/systemd/system/rclone-pcloud.service"
 pcloud_group: "pcloud_users"
 pcloud_gid: "1001"
 
+# Variables pour l'API pCloud
+pcloud_hostname: "eapi.pcloud.com"
+pcloud_token: ""
+
 pcloud_rclone_options:
   - "--allow-other"
   - "--uid 0"
@@ -16,3 +20,4 @@ pcloud_rclone_options:
   - "--cache-dir /var/cache/rclone"
   - "--dir-cache-time 5m"
   - "--log-level INFO"
+  - "--log-file {{ pcloud_log_file }}"
