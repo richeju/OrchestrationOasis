@@ -10,7 +10,7 @@ name> <put you name>
 
 Storage> 40
 
-Press enter on client id and client secret
+Press enter on client ID and client secret
 
 Advanced Settings > press enter for No
 
