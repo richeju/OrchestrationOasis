@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=notify
-ExecStart=/usr/bin/rclone mount pcloud: {{ pcloud_mount_point }} {{ pcloud_rclone_options | join(' ') }}
+ExecStart=/usr/bin/rclone mount pcloud: {{ pcloud_mount_point }} {{ pcloud_rclone_options | join(' ') }} --config {{ pcloud_config_file }}
 ExecStop=/bin/fusermount -u {{ pcloud_mount_point }}
 ExecStopPost=/usr/bin/umount -l {{ pcloud_mount_point }}
 KillMode=process
