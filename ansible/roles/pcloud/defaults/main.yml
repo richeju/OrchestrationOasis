@@ -5,6 +5,7 @@ pcloud_log_file: "/var/log/rclone.log"
 pcloud_service_file: "/etc/systemd/system/rclone-pcloud.service"
 pcloud_group: "pcloud_users"
 pcloud_gid: "1001"
+pcloud_token: ""
 
 pcloud_rclone_options:
   - "--allow-other"
