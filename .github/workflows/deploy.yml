@@ -16,8 +16,8 @@ jobs:
       - name: Run Ansible Playbook
         env:
           ANSIBLE_VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
-          ANSIBLE_ROLES_PATH: ../roles
         run: |
           echo "$ANSIBLE_VAULT_PASSWORD" > vault_pass.txt
-          ansible-playbook -i hosts.ini ansible/playbooks/install_pcloud.yml --vault-password-file vault_pass.txt
-          rm vault_pass.txt
+          cd ansible/playbooks
+          ansible-playbook install_pcloud.yml --vault-password-file ../../vault_pass.txt
+          rm ../../vault_pass.txt

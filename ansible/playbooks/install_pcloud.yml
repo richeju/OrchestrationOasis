@@ -1,5 +1,6 @@
 - name: Configure pCloud with API
-  hosts: all
+  hosts: localhost
+  connection: local
   become: yes
   vars_files:
     - roles/pcloud/vars/vault.yml
