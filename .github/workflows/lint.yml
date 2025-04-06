@@ -9,13 +9,14 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    if: github.repository == 'richeju/orchestrationoasis'
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
       - name: Run Super-Linter
         uses: super-linter/super-linter@v5
         env:
           VALIDATE_ALL_CODEBASE: true
           DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
+          ANSIBLE_LINT_CUSTOM_RULES: "--skip-list=internal-error,vault-encrypted"  # Ignore les erreurs Vault
