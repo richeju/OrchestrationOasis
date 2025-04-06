@@ -1,5 +1,7 @@
-- name: Configure pCloud WebDAV
+- name: Configure pCloud with API
   hosts: all
   become: yes
+  vars_files:
+    - roles/pcloud/vars/vault.yml
   roles:
     - pcloud
