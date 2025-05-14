@@ -1,3 +1,5 @@
+# Automated Debian Setup with Ansible
+
 ### Explanations and Notes
 
 1. **Context**:  
@@ -30,8 +32,6 @@
 5. **Validity of `site.yml`**:  
    - The corrected version (with dashes in `roles` and `vars_files`) is syntactically valid.  
    - Test with `--extra-vars` or inventory variables to enable roles.
-
----
 
 ### Next Steps
 
