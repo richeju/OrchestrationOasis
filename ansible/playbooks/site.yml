@@ -1,3 +1,4 @@
+---
 - name: Install selected components
   hosts: all
   become: yes
