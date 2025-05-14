@@ -1,6 +1,10 @@
 # Automated Debian Setup with Ansible
 
-### Explanations and Notes
+## Overview
+
+Sets up a Debian 12 environment with Docker (containers), pCloud (data access), UFW (firewall), and Jenkins (CI/CD).
+
+## Explanations and Notes
 
 1. **Context**:  
    - The repository is ready for V1 on Debian 12, with `docker`, `pcloud`, `ufw`, and `jenkins`.  
