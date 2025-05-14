@@ -1,3 +1,4 @@
+---
 - name: Install Jenkins with Docker Compose
   hosts: all
   become: yes
