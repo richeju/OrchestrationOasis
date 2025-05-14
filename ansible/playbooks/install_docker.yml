@@ -1,3 +1,4 @@
+---
 - name: Install Docker using role
   hosts: all
   become: yes
