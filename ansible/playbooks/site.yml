@@ -1,16 +1,10 @@
-```yaml
-name: Install selected components
-hosts: all
-become: yes
-vars_files:
-roles/pcloud/vars/vault.yml
-roles:
-
-{ role: docker, when: install_docker | default(false), tags: ['docker'] }
-
-{ role: pcloud, when: install_pcloud | default(false), tags: ['pcloud'] }
-
-{ role: ufw, when: install_ufw | default(false), tags: ['ufw'] }
-
-{ role: jenkins, when: install_jenkins | default(false), tags: ['jenkins'] }
-
+- name: Install selected components
+  hosts: all
+  become: yes
+  vars_files:
+    - roles/pcloud/vars/vault.yml
+  roles:
+    - { role: docker, when: install_docker | default(false), tags: ['docker'] }
+    - { role: pcloud, when: install_pcloud | default(false), tags: ['pcloud'] }
+    - { role: ufw, when: install_ufw | default(false), tags: ['ufw'] }
+    - { role: jenkins, when: install_jenkins | default(false), tags: ['jenkins'] }
