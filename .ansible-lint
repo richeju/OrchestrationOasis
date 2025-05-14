@@ -1,0 +1,9 @@
+---
+exclude_paths:
+  - ansible/roles/pcloud/vars/vault.yml
+additional_requirements:
+  - community.docker
+warn_list:
+  - fqcn-builtins  # Ignore warnings about unqualified built-in modules (e.g., ansible.builtin.ufw)
+skip_list:
+  - module-options  # Skip validation of module options that depend on the runtime environment
