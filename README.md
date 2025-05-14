@@ -1,57 +1,56 @@
-# Automated Debian Setup with Ansible
+# Tasks Remaining for V1 (Debian 12, Bitwarden Web API)
 
-## Overview
+1. **Verify Linting**:
+   - Re-run Super-Linter to confirm:
+     ```bash
+     docker run --rm -v $(pwd):/github/workspace -e VALIDATE_ALL_CODEBASE=true -e VALIDATE_MARKDOWN=true -e VALIDATE_YAML=true -e VALIDATE_ANSIBLE=true -e DEFAULT_BRANCH=main github/super-linter:v5
+     ```
+   - If warnings appear for `pcloud/templates/rclone.conf.j2` or `rclone-pcloud.service.j2`, add `---`.
 
-Sets up a Debian 12 environment with Docker (containers), pCloud (data access), UFW (firewall), and Jenkins (CI/CD).
+2. **Remove `dummy.yml`**:
+   - ```bash
+     git rm scripts/dummy.yml
+     git commit -m "Remove dummy.yml for V1"
+     ```
 
-## Explanations and Notes
+3. **Integrate Bitwarden Web API**:
+   - Delete `ansible/roles/pcloud/vars/vault.yml`:
+     ```bash
+     git rm ansible/roles/pcloud/vars/vault.yml
+     ```
+   - Update `install_pcloud.yml` (remove `vars_files`).
+   - Update `site.yml` (remove `vars_files`).
+   - Modify `pcloud/tasks/main.yml` to use Bitwarden API (authentication, token retrieval).
+   - Update `.ansible-lint` (remove `exclude_paths`).
 
-1. **Context**:  
-   - The repository is ready for V1 on Debian 12, with `docker`, `pcloud`, `ufw`, and `jenkins`.  
-   - The README is concise, focused on personal needs, with remaining tasks clearly listed.  
-   - No `CONTRIBUTING.md` or `LICENSE` is needed, as it’s for personal use only.
+4. **Add Validations to Roles**:
+   - `docker`: Verify service and `docker ps`.
+   - `pcloud`: Verify `/mnt/pcloud` mount.
+   - `ufw`: Verify `ufw status`.
+   - `jenkins`: Verify port 8080.
 
-2. **README Structure**:  
-   - **Introduction**: Briefly describes the repository.  
-   - **Prerequisites**: Minimal list for Debian 12.  
-   - **Getting Started**: Simple instructions to clone, configure, and run.  
-   - **Components**: Table of playbooks with required validations.  
-   - **Tasks Remaining**: Precise steps for V1, including commands and code snippets.  
-   - **Notes**: Reminders for pCloud (Vault) and testing.
+5. **Configure Molecule**:
+   - Create Molecule files for `docker` and `pcloud` (use `debian:12` image).
+   - Update `.github/workflows/lint.yml` with Molecule tests.
 
-3. **Remaining Tasks**:  
-   - **Removal**: Delete `dummy.yml`.  
-   - **Playbook `site.yml`**: Use the corrected version for modular execution.  
-   - **Validations**: Add checks in each role for idempotence and reliability.  
-   - **Molecule**: Set up CI/CD tests for `docker` and `pcloud` on Debian 12.  
-   - **Documentation**: Create `docs/` for quick reference.  
-   - **Inventory**: Provide an example for local tests.  
-   - **Testing and Tagging**: Validate everything on Debian 12 and mark V1.
+6. **Create Documentation**:
+   - Create `docs/` with `docker.md`, `pcloud.md`, `ufw.md`, `jenkins.md`.
+   - Copy `ansible/roles/pcloud/readme.md` to `docs/pcloud.md`.
 
-4. **Debian 12 Focus**:  
-   - Roles are compatible with Debian (`docker` uses the Debian repository).  
-   - Molecule uses the `debian:12` image for tests.  
-   - The README specifies Debian 12 to avoid ambiguity.
+7. **Add Inventory**:
+   - Create `examples/inventory.yml` with Bitwarden variables (`client_id`, `client_secret`, `password`, `token_item_id`).
 
-5. **Validity of `site.yml`**:  
-   - The corrected version (with dashes in `roles` and `vars_files`) is syntactically valid.  
-   - Test with `--extra-vars` or inventory variables to enable roles.
+8. **Test on Debian 12**:
+   - Run playbooks, verify services (Docker, pCloud, UFW, Jenkins).
+   - Test Molecule locally:
+     ```bash
+     pip install molecule[docker] docker
+     cd ansible/roles/docker
+     molecule test
+     ```
 
-### Next Steps
-
-1. **Replace the README**:  
-   - Copy the provided content into `README.md`.  
-   - Update the username and repository URL.
-
-2. **Execute the Tasks**:  
-   - Remove `dummy.yml`.  
-   - Create `site.yml`, add validations, set up Molecule, and create `docs/` and `examples/inventory.yml`.
-
-3. **Test**:  
-   - On Debian 12, run the playbooks and verify services.  
-   - Test Molecule locally for `docker` and `pcloud`.
-
-4. **Tag**:  
-   - Once validated, tag with `git tag v1.0.0`.  
-
-If a specific file is needed (e.g., `docs/ufw.md` or full Molecule config), it can be provided. Indicate if everything is clear or if a particular task requires further detail!
+9. **Tag V1**:
+   - ```bash
+     git tag v1.0.0
+     git push --tags
+     ```
