@@ -1,10 +1,12 @@
 name: Build and Push Docker Image with Packer
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      docker_tag:
+        description: 'Tag for the Docker image (e.g., latest, v1.0.0)'
+        required: false
+        default: 'latest'
 
 jobs:
   build-and-push:
@@ -27,18 +29,26 @@ jobs:
           cd packer
           packer init docker-image.pkr.hcl
 
+      - name: Verify Packer Plugins
+        run: |
+          packer plugins installed
+
       - name: Build Docker Image with Packer
         run: |
           cd packer
-          packer build -var "docker_tag=${{ github.sha }}" docker-image.pkr.hcl
+          packer build -var "docker_tag=${{ github.event.inputs.docker_tag }}-${{ github.sha }}" docker-image.pkr.hcl
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: richeju
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Verify Docker Image
+        run: |
+          docker images ghcr.io/richeju/debian12-server:${{ github.event.inputs.docker_tag }}-${{ github.sha }}
 
       - name: Push Docker Image to GitHub Container Registry
         run: |
-          docker push ghcr.io/richeju/debian12-server:${{ github.sha }}
+          docker push ghcr.io/richeju/debian12-server:${{ github.event.inputs.docker_tag }}-${{ github.sha }}
