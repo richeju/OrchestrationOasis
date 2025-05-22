@@ -19,5 +19,5 @@ echo \
 sudo apt-get update
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-# Ajouter packeruser au groupe docker
-sudo usermod -aG docker packeruser
+# Ajouter zeus au groupe docker
+sudo usermod -aG docker zeus
