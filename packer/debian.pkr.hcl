@@ -9,6 +9,12 @@ variable "iso_checksum" {
   default = "sha256:30ca12a15cae6a1033e03ad59eb7f66a6d5a258dcf27acd115c2bd42d22640e8"
 }
 
+variable "ssh_password" {
+  type      = string
+  default   = "zeus" # Changé pour cohérence, mais sera remplacé par variables.pkrvars.hcl
+  sensitive = true   # Marquer comme sensible pour éviter l'affichage dans les logs
+}
+
 # Data source pour récupérer dynamiquement la dernière image et son SHA256
 data "http" "debian_image_page" {
   url = "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/"
@@ -39,12 +45,13 @@ locals {
   ][0]
 }
 
+# Source (équivalent au builder dans JSON)
 source "virtualbox-iso" "debian" {
   guest_os_type = "Debian_64"
   iso_url       = local.latest_image_url
   iso_checksum  = "sha256:${local.sha256}"
-  ssh_username  = "packeruser"
-  ssh_password  = "packeruser"
+  ssh_username  = "zeus" # Changé de packeruser à zeus
+  ssh_password  = var.ssh_password
   ssh_timeout   = "30m"
   disk_size     = 30000
   memory        = 2048
@@ -65,7 +72,7 @@ source "virtualbox-iso" "debian" {
     "<enter>"
   ]
   http_directory   = "http"
-  shutdown_command = "echo 'packeruser' | sudo -S shutdown -P now"
+  shutdown_command = "echo '${var.ssh_password}' | sudo -S shutdown -P now"
 }
 
 # Build
