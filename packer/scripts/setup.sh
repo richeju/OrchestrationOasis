@@ -19,5 +19,5 @@ echo \
 sudo apt-get update
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-# Ajouter admin au groupe docker
-sudo usermod -aG docker admin
+# Ajouter packeruser au groupe docker
+sudo usermod -aG docker packeruser
