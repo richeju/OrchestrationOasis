@@ -5,10 +5,11 @@ Orchestration Oasis is an infrastructure automation project built around **Ansib
 ## Setup
 
 Run the helper script to install Docker and Ansible on a fresh Debian system.
-The script is non-interactive and skips packages that are already installed:
+The script is non-interactive, installs Git and optionally clones a repository
+if a URL is provided. It skips packages that are already installed:
 
 ```bash
-./scripts/setup-debian.sh
+./scripts/setup-debian.sh <repo_url>
 ```
 
 
