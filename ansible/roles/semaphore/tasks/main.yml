@@ -1,0 +1,17 @@
+---
+- name: Ensure directory for docker-compose exists
+  ansible.builtin.file:
+    path: "{{ semaphore_compose_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Deploy docker-compose file for Semaphore
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ semaphore_compose_dir }}/docker-compose.yml"
+    mode: '0644'
+
+- name: Launch Semaphore stack with docker-compose
+  community.docker.docker_compose:
+    project_src: "{{ semaphore_compose_dir }}"
+    state: present

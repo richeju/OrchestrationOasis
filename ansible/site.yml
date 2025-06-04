@@ -7,3 +7,4 @@
     - ufw
     - pcloud
     - argocd
+    - semaphore

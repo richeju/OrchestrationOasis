@@ -1,0 +1,31 @@
+version: '3'
+services:
+  db:
+    image: "{{ semaphore_mysql_image }}"
+    environment:
+      MYSQL_ROOT_PASSWORD: "{{ semaphore_mysql_root_password }}"
+      MYSQL_DATABASE: "{{ semaphore_db_name }}"
+      MYSQL_USER: "{{ semaphore_db_user }}"
+      MYSQL_PASSWORD: "{{ semaphore_db_password }}"
+    networks:
+      - {{ semaphore_network }}
+  semaphore:
+    image: "{{ semaphore_image }}"
+    environment:
+      SEMAPHORE_DB_USER: "{{ semaphore_db_user }}"
+      SEMAPHORE_DB_PASS: "{{ semaphore_db_password }}"
+      SEMAPHORE_DB_HOST: db
+      SEMAPHORE_DB_PORT: 3306
+      SEMAPHORE_DB: "{{ semaphore_db_name }}"
+      SEMAPHORE_ADMIN_PASSWORD: "{{ semaphore_admin_password }}"
+      SEMAPHORE_ADMIN_NAME: "{{ semaphore_admin_name }}"
+      SEMAPHORE_ADMIN_EMAIL: "{{ semaphore_admin_email }}"
+    ports:
+      - "{{ semaphore_host_port }}:3000"
+    depends_on:
+      - db
+    networks:
+      - {{ semaphore_network }}
+networks:
+  {{ semaphore_network }}:
+    driver: bridge

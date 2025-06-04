@@ -1,0 +1,6 @@
+---
+- name: Install Ansible Semaphore
+  hosts: all
+  become: yes
+  roles:
+    - semaphore

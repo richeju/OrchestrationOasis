@@ -1,0 +1,26 @@
+---
+# Docker image versions
+semaphore_image: "ansiblesemaphore/semaphore:latest"
+semaphore_mysql_image: "mysql:5.7"
+
+# Container names
+semaphore_container_name: "semaphore"
+semaphore_mysql_container_name: "semaphore-db"
+
+# Database credentials
+semaphore_db_user: "semaphore"
+semaphore_db_password: "semaphore"
+semaphore_db_name: "semaphore"
+semaphore_mysql_root_password: "semaphore"
+
+# Admin account defaults
+semaphore_admin_email: "admin@example.com"
+semaphore_admin_name: "admin"
+semaphore_admin_password: "changeme"
+
+# Network and port
+semaphore_network: "semaphore-net"
+semaphore_host_port: 3000
+
+# Directory for docker-compose project
+semaphore_compose_dir: "/opt/semaphore"
