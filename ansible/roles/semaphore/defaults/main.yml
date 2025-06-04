@@ -1,6 +1,6 @@
 ---
 # Docker image versions
-semaphore_image: "ansiblesemaphore/semaphore:latest"
+semaphore_image: "ansiblesemaphore/semaphore:v2.9.39"
 semaphore_mysql_image: "mysql:5.7"
 
 # Container names
