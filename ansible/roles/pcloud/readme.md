@@ -14,4 +14,4 @@ This guide explains how to generate an authentication token for pCloud using rcl
   - `y` if the machine running rclone has a web browser you can use.
 - Log in to pCloud via the browser link provided by rclone and authorize access.
 - Once completed, rclone will display a token in JSON format (e.g., `{"access_token":"xxx","token_type":"bearer","expiry":"2025-05-05T22:00:00Z"}`).
-- Save this token, including the curly braces, and use it in the `pcloud_token` variable in `defaults/main.yml` or a Vault file.
+- Save this token, including the curly braces, and provide it to the role using the `pcloud_token` variable. You can keep the value in `defaults/main.yml` during testing or store it securely with `ansible-vault` in your inventory.
