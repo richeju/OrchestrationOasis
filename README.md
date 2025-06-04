@@ -2,6 +2,14 @@
 
 Orchestration Oasis is an infrastructure automation project built around **Ansible** and **Packer**. It currently features roles for Docker, UFW, pCloud and ArgoCD to help configure a Debian 12 server. The list below tracks the remaining work before the first stable release.
 
+## Setup
+
+Run the helper script to install Docker, Ansible and Packer on a fresh Debian system:
+
+```bash
+./scripts/setup-debian.sh
+```
+
 ## Usage
 
 Build the Docker image with Packer:
