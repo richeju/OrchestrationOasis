@@ -1,4 +1,23 @@
-# Tasks Remaining for V1 (Debian 12, Bitwarden Web API)
+# Orchestration Oasis
+
+Orchestration Oasis is an infrastructure automation project built around **Ansible** and **Packer**. It currently features roles for Docker, UFW, pCloud and ArgoCD to help configure a Debian 12 server. The list below tracks the remaining work before the first stable release.
+
+## Usage
+
+Build the Docker image with Packer:
+
+```bash
+packer build packer/docker-image.pkr.hcl
+```
+
+Run the Ansible playbook (replace `<inventory>` with your inventory file):
+
+```bash
+cd ansible
+ansible-playbook -i <inventory> site.yml
+```
+
+## Tasks Remaining for V1 (Debian 12, Bitwarden Web API)
 
 1. **Verify Linting**:
    - Re-run Super-Linter to confirm:
