@@ -9,14 +9,14 @@ semaphore_mysql_container_name: "semaphore-db"
 
 # Database credentials
 semaphore_db_user: "semaphore"
-semaphore_db_password: "semaphore"
+semaphore_db_password: "REPLACE_ME"
 semaphore_db_name: "semaphore"
-semaphore_mysql_root_password: "semaphore"
+semaphore_mysql_root_password: "REPLACE_ME"
 
 # Admin account defaults
 semaphore_admin_email: "admin@example.com"
 semaphore_admin_name: "admin"
-semaphore_admin_password: "changeme"
+semaphore_admin_password: "REPLACE_ME"
 
 # Network and port
 semaphore_network: "semaphore-net"
