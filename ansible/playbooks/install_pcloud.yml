@@ -3,7 +3,5 @@
   hosts: localhost
   connection: local
   become: yes
-  vars_files:
-    - roles/pcloud/vars/vault.yml
   roles:
     - pcloud
