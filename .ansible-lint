@@ -1,6 +1,4 @@
 ---
-exclude_paths:
-  - ansible/roles/pcloud/vars/vault.yml
 additional_requirements:
   - community.docker
 warn_list:
