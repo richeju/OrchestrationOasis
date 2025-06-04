@@ -51,21 +51,20 @@ ansible-playbook -i <inventory> site.yml
    - `docker`: Verify service and `docker ps`.
    - `pcloud`: Verify `/mnt/pcloud` mount.
    - `ufw`: Verify `ufw status`.
-   - `jenkins`: Verify port 8080.
 
 5. [ ] **Configure Molecule**:
    - Create Molecule files for `docker` and `pcloud` (use `debian:12` image).
    - Update `.github/workflows/lint.yml` with Molecule tests.
 
 6. [ ] **Create Documentation**:
-   - Create `docs/` with `docker.md`, `pcloud.md`, `ufw.md`, `jenkins.md`.
+   - Create `docs/` with `docker.md`, `pcloud.md`, `ufw.md`.
    - Copy `ansible/playbooks/roles/pcloud/readme.md` to `docs/pcloud.md`.
 
 7. [ ] **Add Inventory**:
    - Create `examples/inventory.yml` with Bitwarden variables (`client_id`, `client_secret`, `password`, `token_item_id`).
 
 8. [ ] **Test on Debian 12**:
-   - Run playbooks, verify services (Docker, pCloud, UFW, Jenkins).
+   - Run playbooks, verify services (Docker, pCloud, UFW).
    - Test Molecule locally:
      ```bash
      pip install molecule[docker] docker
