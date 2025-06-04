@@ -2,6 +2,9 @@
 # Install Docker and Ansible on Debian-based systems
 set -euo pipefail
 
+# Optional repository URL to clone
+REPO_URL="${1:-}"
+
 if [ "$(id -u)" -ne 0 ]; then
     SUDO='sudo'
 else
@@ -9,7 +12,11 @@ else
 fi
 
 $SUDO apt-get update
-$SUDO apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release software-properties-common
+$SUDO apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release software-properties-common git
+
+if [ -n "$REPO_URL" ]; then
+    git clone "$REPO_URL"
+fi
 
 # Install Ansible if not present
 if ! command -v ansible >/dev/null 2>&1; then
