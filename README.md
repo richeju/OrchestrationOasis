@@ -58,3 +58,8 @@
 ## Using Docker
 
 See `docs/docker.md` for running the playbooks inside a container.
+
+## Running ArgoCD in Docker
+
+The repository includes `docker-compose.argocd.yml` for a quick way to start
+an ArgoCD container. Usage instructions are in `docs/argocd-container.md`.
