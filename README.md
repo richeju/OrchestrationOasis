@@ -54,3 +54,7 @@
      git tag v1.0.0
      git push --tags
      ```
+
+## Using Docker
+
+See `docs/docker.md` for running the playbooks inside a container.
