@@ -1,7 +1,0 @@
----
-- name: Install ArgoCD
-  hosts: localhost
-  connection: local
-  become: yes
-  roles:
-    - argocd

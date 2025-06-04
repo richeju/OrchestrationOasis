@@ -1,6 +1,6 @@
 # Orchestration Oasis
 
-Orchestration Oasis is an infrastructure automation project built around **Ansible**. It currently features roles for Docker, UFW, pCloud and ArgoCD to help configure a Debian 12 server. The list below tracks the remaining work before the first stable release.
+Orchestration Oasis is an infrastructure automation project built around **Ansible**. It currently features roles for Docker, UFW, and pCloud to help configure a Debian 12 server. The list below tracks the remaining work before the first stable release.
 
 ## Setup
 
@@ -38,9 +38,9 @@ ansible-playbook -i <inventory> site.yml
      ```
 
 3. **Integrate Bitwarden Web API**:
-   - Delete `ansible/roles/pcloud/vars/vault.yml`:
+   - Delete `ansible/playbooks/roles/pcloud/vars/vault.yml`:
      ```bash
-     git rm ansible/roles/pcloud/vars/vault.yml
+     git rm ansible/playbooks/roles/pcloud/vars/vault.yml
      ```
    - Update `install_pcloud.yml` (remove `vars_files`).
    - Update `site.yml` (remove `vars_files`).
@@ -59,7 +59,7 @@ ansible-playbook -i <inventory> site.yml
 
 6. **Create Documentation**:
    - Create `docs/` with `docker.md`, `pcloud.md`, `ufw.md`, `jenkins.md`.
-   - Copy `ansible/roles/pcloud/readme.md` to `docs/pcloud.md`.
+   - Copy `ansible/playbooks/roles/pcloud/readme.md` to `docs/pcloud.md`.
 
 7. **Add Inventory**:
    - Create `examples/inventory.yml` with Bitwarden variables (`client_id`, `client_secret`, `password`, `token_item_id`).
@@ -69,7 +69,7 @@ ansible-playbook -i <inventory> site.yml
    - Test Molecule locally:
      ```bash
      pip install molecule[docker] docker
-     cd ansible/roles/docker
+     cd ansible/playbooks/roles/docker
      molecule test
      ```
 
