@@ -1,0 +1,8 @@
+---
+semaphore_version: "latest"
+semaphore_dir: "/opt/semaphore"
+semaphore_db_user: "semaphore"
+semaphore_db_name: "semaphore"
+semaphore_db_pass: ""
+semaphore_admin: "admin"
+semaphore_admin_password: ""
