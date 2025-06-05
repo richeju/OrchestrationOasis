@@ -7,21 +7,21 @@
   ansible.builtin.apt:
     name: rclone
     state: present
-    update_cache: yes
-  become: yes
+    update_cache: true
+  become: true
 
 - name: Install fuse for rclone
   ansible.builtin.apt:
     name: fuse
     state: present
-  become: yes
+  become: true
 
 - name: Create pcloud_users group
   ansible.builtin.group:
     name: "{{ pcloud_group }}"
     gid: "{{ pcloud_gid }}"
     state: present
-  become: yes
+  become: true
 
 - name: Create mountpoint
   ansible.builtin.file:
@@ -30,7 +30,7 @@
     mode: '0770'
     owner: root
     group: "{{ pcloud_group }}"
-  become: yes
+  become: true
 
 - name: Create directory for rclone config
   ansible.builtin.file:
@@ -39,7 +39,7 @@
     mode: '0755'
     owner: root
     group: root
-  become: yes
+  become: true
 
 - name: Configure rclone credentials file
   ansible.builtin.template:
@@ -48,7 +48,7 @@
     mode: '0600'
     owner: root
     group: root
-  become: yes
+  become: true
 
 - name: Create log file for rclone
   ansible.builtin.file:
@@ -57,7 +57,7 @@
     mode: '0644'
     owner: root
     group: root
-  become: yes
+  become: true
 
 - name: Create rclone cache directory
   ansible.builtin.file:
@@ -66,7 +66,7 @@
     mode: '0755'
     owner: root
     group: root
-  become: yes
+  become: true
 
 - name: Generate rclone-pcloud systemd service
   ansible.builtin.template:
@@ -75,16 +75,16 @@
     mode: '0644'
     owner: root
     group: root
-  become: yes
+  become: true
 
 - name: Reload systemd daemon
   ansible.builtin.systemd:
-    daemon_reload: yes
-  become: yes
+    daemon_reload: true
+  become: true
 
 - name: Enable and start rclone-pcloud service
   ansible.builtin.systemd:
     name: rclone-pcloud.service
-    enabled: yes
+    enabled: true
     state: started
-  become: yes
+  become: true

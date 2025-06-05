@@ -12,7 +12,7 @@
     mode: '0644'
 
 - name: Launch Semaphore stack
-  community.docker.docker_compose:
+  community.docker.docker_compose_v2:
     project_src: "{{ semaphore_dir }}"
     state: present
   register: semaphore_compose
