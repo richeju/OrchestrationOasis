@@ -22,7 +22,8 @@ cd ansible
 ansible-playbook -i <inventory> site.yml
 ```
 
-For Windows hosts, you can install Chocolatey and VLC in one step:
+For Windows hosts, you can install Chocolatey along with VLC, Google Chrome,
+Thunderbird and Notepad++ in one step:
 
 ```bash
 ansible-playbook -i <inventory> playbooks/install_chocolatey_and_vlc.yml
