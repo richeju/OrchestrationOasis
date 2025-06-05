@@ -1,0 +1,5 @@
+---
+- name: Ensure Git is installed
+  chocolatey.chocolatey.win_chocolatey:
+    name: git
+    state: "{{ git_state }}"
