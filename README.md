@@ -22,6 +22,14 @@ cd ansible
 ansible-playbook -i <inventory> site.yml
 ```
 
+For Windows hosts, you can install Chocolatey and VLC in one step:
+
+```bash
+ansible-playbook -i <inventory> playbooks/install_chocolatey_and_vlc.yml
+```
+
+The playbooks `install_chocolatey.yml` and `install_vlc.yml` remain available if you prefer to run them separately.
+
 ## Linting
 
 Use the helper script to run `yamllint` and `ansible-lint` locally:
