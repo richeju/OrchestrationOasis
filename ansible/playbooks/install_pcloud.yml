@@ -1,7 +1,6 @@
 ---
 - name: Configure pCloud with API
-  hosts: localhost
-  connection: local
+  hosts: all
   become: true
   roles:
     - pcloud
