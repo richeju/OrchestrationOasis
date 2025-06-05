@@ -1,6 +1,6 @@
 ---
 - name: Install Docker using role
-  hosts: all
+  hosts: docker
   become: true
   roles:
     - docker
