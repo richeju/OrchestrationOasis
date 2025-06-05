@@ -1,6 +1,8 @@
 # Orchestration Oasis
 
-Orchestration Oasis is an infrastructure automation project built around **Ansible**. It currently features roles for Docker, UFW, Fail2ban, pCloud, and Semaphore to help configure a Debian 12 server. Windows hosts can also be provisioned using Chocolatey, with roles to install VLC, Google Chrome, Thunderbird, Notepad++, and Git. The list below tracks the remaining work before the first stable release.
+Orchestration Oasis is an infrastructure automation project built around **Ansible**. It currently features roles for Docker, UFW, Fail2ban, pCloud, and Semaphore to help configure a Debian 12 server.
+Windows hosts can also be provisioned using Chocolatey, with roles to install VLC, Google Chrome, Thunderbird, Notepad++, Git, and GeForce Now.
+The list below tracks the remaining work before the first stable release.
 
 ## Setup
 
@@ -23,7 +25,7 @@ ansible-playbook -i <inventory> site.yml
 ```
 
 For Windows hosts, you can install Chocolatey along with VLC, Google Chrome,
-Thunderbird, Notepad++ and Git in one step:
+Thunderbird, Notepad++, Git and GeForce Now in one step:
 
 ```bash
 ansible-playbook -i <inventory> playbooks/install_chocolatey_and_vlc.yml

@@ -1,0 +1,6 @@
+---
+- name: Ensure GeForce Now is installed
+  chocolatey.chocolatey.win_chocolatey:
+    name: nvidia-geforce-now
+    state: "{{ geforcenow_state }}"
+    install_args: "{{ chocolatey_install_args }}"
