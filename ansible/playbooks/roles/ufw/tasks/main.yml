@@ -3,36 +3,36 @@
   ansible.builtin.apt:
     name: ufw
     state: present
-    update_cache: yes
-  become: yes
+    update_cache: true
+  become: true
 
 - name: Allow SSH access
-  ansible.builtin.ufw:
+  community.general.ufw:
     rule: allow
     name: OpenSSH
-  become: yes
+  become: true
 
 - name: Allow specific ports (customizable)
-  ansible.builtin.ufw:
+  community.general.ufw:
     rule: allow
     port: "{{ item }}"
     proto: tcp
   loop: "{{ ufw_allowed_ports | default([]) }}"
-  become: yes
+  become: true
 
 - name: Deny all other incoming traffic by default
-  ansible.builtin.ufw:
+  community.general.ufw:
     direction: incoming
     policy: deny
-  become: yes
+  become: true
 
 - name: Allow all outgoing traffic
-  ansible.builtin.ufw:
+  community.general.ufw:
     direction: outgoing
     policy: allow
-  become: yes
+  become: true
 
 - name: Enable ufw
-  ansible.builtin.ufw:
+  community.general.ufw:
     state: enabled
-  become: yes
+  become: true
