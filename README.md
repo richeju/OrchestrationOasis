@@ -1,6 +1,6 @@
 # Orchestration Oasis
 
-Orchestration Oasis is an infrastructure automation project built around **Ansible**. It currently features roles for Docker, UFW, pCloud, and Semaphore to help configure a Debian 12 server. The list below tracks the remaining work before the first stable release.
+Orchestration Oasis is an infrastructure automation project built around **Ansible**. It currently features roles for Docker, UFW, pCloud, and Semaphore to help configure a Debian 12 server. Windows hosts can also be provisioned using Chocolatey, with a dedicated role to install VLC. The list below tracks the remaining work before the first stable release.
 
 ## Setup
 

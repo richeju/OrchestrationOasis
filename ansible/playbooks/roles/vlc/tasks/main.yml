@@ -1,0 +1,5 @@
+---
+- name: Ensure VLC is installed
+  chocolatey.chocolatey.win_chocolatey:
+    name: vlc
+    state: "{{ vlc_state }}"
