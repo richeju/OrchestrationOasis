@@ -1,0 +1,6 @@
+---
+- name: Install Chocolatey and VLC
+  hosts: windows
+  roles:
+    - chocolatey
+    - vlc
