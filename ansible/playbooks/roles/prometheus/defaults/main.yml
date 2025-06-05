@@ -1,0 +1,3 @@
+---
+prometheus_version: "latest"
+prometheus_dir: "/opt/prometheus"
