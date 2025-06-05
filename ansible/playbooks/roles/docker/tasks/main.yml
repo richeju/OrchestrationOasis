@@ -2,7 +2,7 @@
 ---
 - name: Update apt cache and install prerequisites
   ansible.builtin.apt:
-    update_cache: yes
+    update_cache: true
     name:
       - apt-transport-https
       - ca-certificates
@@ -24,7 +24,7 @@
       {{ ansible_distribution_release }} stable
     state: present
     filename: docker
-    update_cache: yes
+    update_cache: true
 
 - name: Install Docker packages
   ansible.builtin.apt:
@@ -38,14 +38,14 @@
 - name: Enable and start Docker service
   ansible.builtin.systemd:
     name: docker
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Add user to docker group
   ansible.builtin.user:
     name: "{{ ansible_user }}"
     groups: docker
-    append: yes
+    append: true
   when: ansible_user is defined
 
 - name: Ensure docker-compose binary is absent (cleanup legacy standalone)
