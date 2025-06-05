@@ -1,0 +1,12 @@
+version: '3'
+services:
+  prometheus:
+    image: prom/prometheus:{{ prometheus_version }}
+    restart: unless-stopped
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+volumes:
+  prometheus_data:
