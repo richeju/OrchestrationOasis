@@ -3,10 +3,8 @@
   chocolatey.chocolatey.win_chocolatey:
     name: chocolatey
     state: "{{ chocolatey_state }}"
-    install_args: "{{ chocolatey_install_args }}"
 
 - name: Ensure all Chocolatey packages are up to date
   chocolatey.chocolatey.win_chocolatey:
     name: all
     state: latest
-    install_args: "{{ chocolatey_install_args }}"
