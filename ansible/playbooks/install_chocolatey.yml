@@ -1,0 +1,5 @@
+---
+- name: Install Chocolatey
+  hosts: windows
+  roles:
+    - chocolatey
