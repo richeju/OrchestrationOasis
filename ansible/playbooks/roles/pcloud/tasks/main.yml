@@ -1,7 +1,15 @@
 ---
 - name: Retrieve pCloud token from Bitwarden
   ansible.builtin.set_fact:
-    pcloud_token: "{{ lookup('bitwarden.secrets', 'item', item_id=token_item_id, client_id=client_id, client_secret=client_secret, password=password) }}"
+    pcloud_token: >-
+      {{ lookup(
+        'bitwarden.secrets',
+        'item',
+        item_id=token_item_id,
+        client_id=client_id,
+        client_secret=client_secret,
+        password=password,
+      ) }}
 
 - name: Install rclone
   ansible.builtin.apt:
