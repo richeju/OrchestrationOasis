@@ -22,6 +22,18 @@ cd ansible
 ansible-playbook -i <inventory> site.yml
 ```
 
+## Linting
+
+Use the helper script to run `yamllint` and `ansible-lint` locally:
+
+```bash
+./scripts/run-lint.sh
+```
+
+The script automatically sets `ANSIBLE_CONFIG` to `ansible/ansible.cfg`. If you
+can't run the Docker-based Super-Linter locally, rely on the GitHub workflow to
+perform the additional checks.
+
 ## Tasks Remaining for V1 (Debian 12, Bitwarden Web API)
 
 1. [x] **Verify Linting**:
