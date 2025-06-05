@@ -1,0 +1,8 @@
+# ansible/playbooks/roles/fail2ban/templates/jail.local.j2
+[DEFAULT]
+bantime = {{ fail2ban_bantime }}
+findtime = {{ fail2ban_findtime }}
+maxretry = {{ fail2ban_maxretry }}
+
+[sshd]
+enabled = true
