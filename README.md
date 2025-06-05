@@ -45,10 +45,10 @@ perform the additional checks.
     - `---` has been added to these templates to satisfy the linter.
 
 2. [x] **Remove `dummy.yml`**:
-    ```bash
-    git rm scripts/dummy.yml
-    git commit -m "Remove dummy.yml for V1"
-    ```
+    - ```bash
+     git rm scripts/dummy.yml
+     git commit -m "Remove dummy.yml for V1"
+     ```
 
 3. [x] **Integrate Bitwarden Web API**:
     - Delete `ansible/playbooks/roles/pcloud/vars/vault.yml`:
@@ -86,7 +86,7 @@ perform the additional checks.
      ```
 
 9. [ ] **Tag V1**:
-    ```bash
-    git tag v1.0.0
-    git push --tags
-    ```
+    - ```bash
+     git tag v1.0.0
+     git push --tags
+     ```
