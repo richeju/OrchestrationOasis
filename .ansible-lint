@@ -1,6 +1,4 @@
 ---
-additional_requirements:
-  - community.docker
 warn_list:
   - fqcn-builtins  # Ignore warnings about unqualified built-in modules (e.g., ansible.builtin.ufw)
 skip_list:
