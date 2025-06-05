@@ -29,6 +29,8 @@ ansible-playbook -i <inventory> playbooks/install_chocolatey_and_vlc.yml
 ```
 
 The playbooks `install_chocolatey.yml` and `install_vlc.yml` remain available if you prefer to run them separately.
+The Chocolatey role now also upgrades all installed packages to their latest
+versions on each run.
 
 ## Linting
 

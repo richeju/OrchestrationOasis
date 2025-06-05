@@ -3,3 +3,8 @@
   chocolatey.chocolatey.win_chocolatey:
     name: chocolatey
     state: "{{ chocolatey_state }}"
+
+- name: Ensure all Chocolatey packages are up to date
+  chocolatey.chocolatey.win_chocolatey:
+    name: all
+    state: latest
