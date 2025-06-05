@@ -24,12 +24,13 @@ ansible-playbook -i <inventory> site.yml
 
 ## Tasks Remaining for V1 (Debian 12, Bitwarden Web API)
 
-1. [ ] **Verify Linting**:
+1. [x] **Verify Linting**:
    - Re-run Super-Linter to confirm:
      ```bash
      docker run --rm -v $(pwd):/github/workspace -e VALIDATE_ALL_CODEBASE=true -e VALIDATE_MARKDOWN=true -e VALIDATE_YAML=true -e VALIDATE_ANSIBLE=true -e DEFAULT_BRANCH=main github/super-linter:v5
      ```
    - If warnings appear for `pcloud/templates/rclone.conf.j2` or `rclone-pcloud.service.j2`, add `---`.
+   - `---` has been added to these templates to satisfy the linter.
 
 2. [x] **Remove `dummy.yml`**:
    - ```bash
