@@ -1,6 +1,9 @@
 ---
-- name: Install Chocolatey and VLC
+- name: Install Chocolatey and desktop apps
   hosts: windows
   roles:
     - chocolatey
     - vlc
+    - chrome
+    - thunderbird
+    - notepadplusplus
