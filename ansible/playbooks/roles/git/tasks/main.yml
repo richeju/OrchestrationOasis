@@ -3,3 +3,4 @@
   chocolatey.chocolatey.win_chocolatey:
     name: git
     state: "{{ git_state }}"
+    install_args: "{{ chocolatey_install_args }}"

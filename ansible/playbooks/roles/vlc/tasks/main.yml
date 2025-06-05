@@ -3,3 +3,4 @@
   chocolatey.chocolatey.win_chocolatey:
     name: vlc
     state: "{{ vlc_state }}"
+    install_args: "{{ chocolatey_install_args }}"
