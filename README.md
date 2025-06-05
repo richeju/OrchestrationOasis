@@ -44,13 +44,7 @@ perform the additional checks.
     - If warnings appear for `pcloud/templates/rclone.conf.j2` or `rclone-pcloud.service.j2`, add `---`.
     - `---` has been added to these templates to satisfy the linter.
 
-2. [x] **Remove `dummy.yml`**:
-    - ```bash
-     git rm scripts/dummy.yml
-     git commit -m "Remove dummy.yml for V1"
-     ```
-
-3. [x] **Integrate Bitwarden Web API**:
+2. [x] **Integrate Bitwarden Web API**:
     - Delete `ansible/playbooks/roles/pcloud/vars/vault.yml`:
      ```bash
      git rm ansible/playbooks/roles/pcloud/vars/vault.yml
@@ -60,33 +54,27 @@ perform the additional checks.
     - Modify `pcloud/tasks/main.yml` to use Bitwarden API (authentication, token retrieval).
     - Update `.ansible-lint` (remove `exclude_paths`).
 
-4. [ ] **Add Validations to Roles**:
+3. [ ] **Add Validations to Roles**:
     - `docker`: Verify service and `docker ps`.
     - `pcloud`: Verify `/mnt/pcloud` mount.
     - `ufw`: Verify `ufw status`.
 
-5. [ ] **Configure Molecule**:
+4. [ ] **Configure Molecule**:
     - Create Molecule files for `docker` and `pcloud` (use `debian:12` image).
     - Update `.github/workflows/lint.yml` with Molecule tests.
 
-6. [ ] **Create Documentation**:
+5. [ ] **Create Documentation**:
     - Create `docs/` with `docker.md`, `pcloud.md`, `ufw.md`.
     - Copy `ansible/playbooks/roles/pcloud/readme.md` to `docs/pcloud.md`.
 
-7. [ ] **Add Inventory**:
+6. [ ] **Add Inventory**:
     - Create `examples/inventory.yml` with Bitwarden variables (`client_id`, `client_secret`, `password`, `token_item_id`).
 
-8. [ ] **Test on Debian 12**:
+7. [ ] **Test on Debian 12**:
     - Run playbooks, verify services (Docker, pCloud, UFW, Semaphore).
     - Test Molecule locally:
      ```bash
      pip install molecule[docker] docker
      cd ansible/playbooks/roles/docker
      molecule test
-     ```
-
-9. [ ] **Tag V1**:
-    - ```bash
-     git tag v1.0.0
-     git push --tags
      ```
