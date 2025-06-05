@@ -1,6 +1,6 @@
 ---
 - name: Configure pCloud with API
-  hosts: all
+  hosts: pcloud
   become: true
   roles:
     - pcloud

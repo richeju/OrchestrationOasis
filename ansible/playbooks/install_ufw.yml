@@ -1,6 +1,6 @@
 ---
 - name: Install and configure UFW
-  hosts: all
+  hosts: ufw
   become: true
   roles:
     - ufw
