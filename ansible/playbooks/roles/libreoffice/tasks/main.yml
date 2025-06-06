@@ -1,0 +1,6 @@
+---
+- name: Ensure LibreOffice is installed
+  chocolatey.chocolatey.win_chocolatey:
+    name: libreoffice-fresh
+    state: "{{ libreoffice_state }}"
+    install_args: "{{ chocolatey_install_args }}"
