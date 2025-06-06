@@ -1,0 +1,6 @@
+---
+- name: Ensure Everything is installed
+  chocolatey.chocolatey.win_chocolatey:
+    name: everything
+    state: "{{ everything_state }}"
+    install_args: "{{ chocolatey_install_args }}"
