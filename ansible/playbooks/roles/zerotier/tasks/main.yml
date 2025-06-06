@@ -1,0 +1,6 @@
+---
+- name: Ensure ZeroTier is installed
+  chocolatey.chocolatey.win_chocolatey:
+    name: zerotier-one
+    state: "{{ zerotier_state }}"
+    install_args: "{{ chocolatey_install_args }}"
