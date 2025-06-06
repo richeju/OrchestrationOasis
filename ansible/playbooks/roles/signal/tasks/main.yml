@@ -1,0 +1,6 @@
+---
+- name: Ensure Signal is installed
+  chocolatey.chocolatey.win_chocolatey:
+    name: signal
+    state: "{{ signal_state }}"
+    install_args: "{{ chocolatey_install_args }}"
