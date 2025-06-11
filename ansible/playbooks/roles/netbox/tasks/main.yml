@@ -1,0 +1,34 @@
+---
+- name: Ensure NetBox directory exists
+  ansible.builtin.file:
+    path: "{{ netbox_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Deploy environment files
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ netbox_dir }}/{{ item.dest }}"
+    mode: '0600'
+  loop:
+    - { src: 'netbox.env.j2', dest: 'netbox.env' }
+    - { src: 'postgres.env.j2', dest: 'postgres.env' }
+    - { src: 'redis.env.j2', dest: 'redis.env' }
+  loop_control:
+    label: "{{ item.dest }}"
+
+- name: Deploy docker-compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ netbox_dir }}/docker-compose.yml"
+    mode: '0644'
+
+- name: Launch NetBox stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ netbox_dir }}"
+    state: present
+  register: netbox_compose
+
+- name: Display compose status
+  ansible.builtin.debug:
+    var: netbox_compose
