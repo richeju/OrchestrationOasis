@@ -1,0 +1,6 @@
+---
+- name: Ensure Steam is installed
+  chocolatey.chocolatey.win_chocolatey:
+    name: steam
+    state: "{{ steam_state }}"
+    install_args: "{{ chocolatey_install_args }}"
