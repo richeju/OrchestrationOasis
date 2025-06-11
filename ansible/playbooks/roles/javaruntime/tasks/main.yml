@@ -1,0 +1,6 @@
+---
+- name: Ensure Java Runtime Environment is installed
+  chocolatey.chocolatey.win_chocolatey:
+    name: javaruntime
+    state: "{{ javaruntime_state }}"
+    install_args: "{{ chocolatey_install_args }}"
