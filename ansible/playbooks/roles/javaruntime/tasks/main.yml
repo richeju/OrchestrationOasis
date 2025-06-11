@@ -1,6 +1,6 @@
 ---
-- name: Ensure Java Runtime Environment is installed
+- name: Ensure OpenJDK 17 is installed
   chocolatey.chocolatey.win_chocolatey:
-    name: javaruntime
+    name: openjdk17
     state: "{{ javaruntime_state }}"
     install_args: "{{ chocolatey_install_args }}"
