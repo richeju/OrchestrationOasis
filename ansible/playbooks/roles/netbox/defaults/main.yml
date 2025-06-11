@@ -1,0 +1,8 @@
+---
+netbox_version: "latest"
+netbox_dir: "/opt/netbox"
+netbox_db_name: "netbox"
+netbox_db_user: "netbox"
+netbox_db_password: "netbox"
+netbox_redis_password: "netbox"
+netbox_secret_key: "change-me"
