@@ -35,6 +35,16 @@ The playbooks `install_chocolatey.yml` and `install_vlc.yml` remain available if
 The Chocolatey role now also upgrades all installed packages to their latest
 versions on each run.
 
+## OCR Example
+
+An example Node script using **tesseract.js** is available in `examples/ocr.mjs`.
+Install `tesseract.js` and run the script with an image path:
+
+```bash
+npm install tesseract.js@latest
+node examples/ocr.mjs path/to/image.png
+```
+
 ## Linting
 
 Use the helper script to run `yamllint` and `ansible-lint` locally:
