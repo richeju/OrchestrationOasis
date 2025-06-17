@@ -1,0 +1,6 @@
+---
+- name: Ensure ChocolateyGUI is installed
+  chocolatey.chocolatey.win_chocolatey:
+    name: chocolateygui
+    state: "{{ chocolateygui_state }}"
+    install_args: "{{ chocolatey_install_args }}"

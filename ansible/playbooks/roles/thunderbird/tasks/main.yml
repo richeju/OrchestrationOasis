@@ -1,6 +1,0 @@
----
-- name: Ensure Thunderbird is installed
-  chocolatey.chocolatey.win_chocolatey:
-    name: thunderbird
-    state: "{{ thunderbird_state }}"
-    install_args: "{{ chocolatey_install_args }}"

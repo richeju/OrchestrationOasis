@@ -1,6 +1,0 @@
----
-- name: Ensure Notepad++ is installed
-  chocolatey.chocolatey.win_chocolatey:
-    name: notepadplusplus
-    state: "{{ notepadplusplus_state }}"
-    install_args: "{{ chocolatey_install_args }}"

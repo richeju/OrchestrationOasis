@@ -1,6 +1,0 @@
----
-- name: Ensure pCloud is installed
-  chocolatey.chocolatey.win_chocolatey:
-    name: pcloud
-    state: "{{ pcloud_win_state }}"
-    install_args: "{{ chocolatey_install_args }}"
