@@ -1,7 +1,7 @@
 # Orchestration Oasis
 
 Orchestration Oasis is an infrastructure automation project built around **Ansible**. It currently features roles for Docker, UFW, Fail2ban, pCloud, and Semaphore to help configure a Debian 12 server.
-Windows hosts can also be provisioned using Chocolatey, with roles to install VLC, Google Chrome, Thunderbird, Notepad++, Git, OpenJDK 17 (JRE), 7-Zip, Everything, LibreOffice, pCloud, Signal, ZeroTier, and Steam.
+Windows hosts can also be provisioned using Chocolatey. A dedicated role installs Chocolatey, and another role installs the optional Chocolatey GUI.
 The list below tracks the remaining work before the first stable release.
 
 ## Setup
@@ -24,16 +24,24 @@ cd ansible
 ansible-playbook -i <inventory> site.yml
 ```
 
-For Windows hosts, you can install Chocolatey along with VLC, Google Chrome,
-Thunderbird, Notepad++, Git, OpenJDK 17 (JRE), 7-Zip, Everything, LibreOffice, pCloud, Signal, ZeroTier, and Steam in one step:
+
+For Windows hosts, first install Chocolatey:
 
 ```bash
-ansible-playbook -i <inventory> playbooks/install_chocolatey_and_vlc.yml
+ansible-playbook -i <inventory> playbooks/install_chocolatey.yml
 ```
 
-The playbooks `install_chocolatey.yml` and `install_vlc.yml` remain available if you prefer to run them separately.
+Optionally install the Chocolatey GUI:
+
+```bash
+ansible-playbook -i <inventory> playbooks/install_chocolatey_gui.yml
+```
+
 The Chocolatey role now also upgrades all installed packages to their latest
 versions on each run.
+
+To remove unnecessary packages while keeping Chocolatey, run `choco uninstall <package>` for each application you want to remove.
+
 
 ## Linting
 

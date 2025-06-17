@@ -1,0 +1,6 @@
+---
+- name: Install Chocolatey and Chocolatey GUI
+  hosts: windows
+  roles:
+    - chocolatey
+    - chocolateygui
