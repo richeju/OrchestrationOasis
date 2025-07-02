@@ -1,6 +1,6 @@
 # Orchestration Oasis
 
-Orchestration Oasis is an infrastructure automation project built around **Ansible**. It currently features roles for Docker, UFW, Fail2ban, pCloud, and Semaphore to help configure a Debian 12 server.
+Orchestration Oasis is an infrastructure automation project built around **Ansible**. It currently features roles for Docker, UFW, Fail2ban, pCloud, Semaphore, and Zerotier to help configure a Debian 12 server.
 Windows hosts can also be provisioned using Chocolatey. A dedicated role installs Chocolatey, and another role installs the optional Chocolatey GUI.
 The list below tracks the remaining work before the first stable release.
 
@@ -39,6 +39,14 @@ ansible-playbook -i <inventory> playbooks/install_chocolatey_gui.yml
 
 The Chocolatey role now also upgrades all installed packages to their latest
 versions on each run.
+
+To install Zerotier only on hosts in the `zerotier` group:
+
+```bash
+ansible-playbook -i <inventory> playbooks/install_zerotier.yml
+```
+
+Set `zerotier_network_id` to join a specific network (leave empty to skip).
 
 To remove unnecessary packages while keeping Chocolatey, run `choco uninstall <package>` for each application you want to remove.
 

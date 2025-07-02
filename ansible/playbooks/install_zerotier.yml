@@ -1,0 +1,7 @@
+---
+- name: Install and configure Zerotier
+  hosts: zerotier
+  become: true
+  roles:
+    - zerotier
+
