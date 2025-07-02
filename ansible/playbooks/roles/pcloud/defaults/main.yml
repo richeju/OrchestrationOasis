@@ -13,7 +13,7 @@ pcloud_token: ""
 pcloud_rclone_options:
   - "--allow-other"
   - "--uid 0"
-  - "--gid 1000"
+  - "--gid 1001"
   - "--file-perms 0660"
   - "--dir-perms 0770"
   - "--vfs-cache-mode full"
