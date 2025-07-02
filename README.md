@@ -6,9 +6,10 @@ The list below tracks the remaining work before the first stable release.
 
 ## Setup
 
-Run the helper script to install Docker and Ansible on a fresh Debian system.
-The script is non-interactive, installs Git and optionally clones a repository
-if a URL is provided. It skips packages that are already installed:
+Run the helper script to install Docker on a fresh Debian system. Ansible is
+included with the Semaphore container, so it does not need to be installed on
+the host. The script is non-interactive, installs Git and optionally clones a
+repository if a URL is provided. It skips packages that are already installed:
 
 ```bash
 ./scripts/setup-debian.sh <repo_url>
