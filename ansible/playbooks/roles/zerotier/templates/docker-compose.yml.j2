@@ -1,0 +1,17 @@
+version: '3'
+services:
+  zerotier:
+    image: zerotier/zerotier:{{ zerotier_version }}
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    volumes:
+      - zerotier-data:/var/lib/zerotier-one
+{% if zerotier_network_id %}
+    command: {{ zerotier_network_id }}
+{% endif %}
+volumes:
+  zerotier-data:
