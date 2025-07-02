@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install Docker and Ansible on Debian-based systems
+# Install Docker on Debian-based systems
 set -euo pipefail
 
 # Optional repository URL to clone
@@ -17,12 +17,6 @@ $SUDO apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-rele
 if [ -n "$REPO_URL" ]; then
     git clone "$REPO_URL"
 fi
-
-# Install Ansible if not present
-if ! command -v ansible >/dev/null 2>&1; then
-    $SUDO apt-get install -y ansible
-fi
-
 
 # Install Docker if not present
 if ! command -v docker >/dev/null 2>&1; then
@@ -46,4 +40,5 @@ if ! command -v docker >/dev/null 2>&1; then
     fi
 fi
 
-echo "Docker and Ansible installation complete."
+echo "Docker installation complete."
+
