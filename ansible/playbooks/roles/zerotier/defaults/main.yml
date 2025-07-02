@@ -1,3 +1,4 @@
 ---
+zerotier_version: "latest"
+zerotier_dir: "/opt/zerotier"
 zerotier_network_id: ""
-

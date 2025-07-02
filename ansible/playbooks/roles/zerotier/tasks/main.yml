@@ -1,37 +1,22 @@
 ---
-- name: Add Zerotier GPG key
-  ansible.builtin.apt_key:
-    url: https://download.zerotier.com/contact%40zerotier.com.gpg
+- name: Ensure Zerotier directory exists
+  ansible.builtin.file:
+    path: "{{ zerotier_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Deploy docker-compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ zerotier_dir }}/docker-compose.yml"
+    mode: '0644'
+
+- name: Launch Zerotier stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ zerotier_dir }}"
     state: present
-  become: true
+  register: zerotier_compose
 
-- name: Add Zerotier repository
-  ansible.builtin.apt_repository:
-    repo: "deb https://download.zerotier.com/debian/{{ ansible_distribution_release | lower }} {{ ansible_distribution_release | lower }} main"
-    filename: zerotier
-    state: present
-    update_cache: true
-  become: true
-
-- name: Install zerotier-one package
-  ansible.builtin.apt:
-    name: zerotier-one
-    state: present
-    update_cache: true
-  become: true
-
-- name: Enable and start Zerotier service
-  ansible.builtin.systemd:
-    name: zerotier-one
-    enabled: true
-    state: started
-  become: true
-
-- name: Join Zerotier network if configured
-  ansible.builtin.command: "zerotier-cli join {{ zerotier_network_id }}"
-  args:
-    creates: "/var/lib/zerotier-one/networks.d/{{ zerotier_network_id }}.conf"
-  when: zerotier_network_id | length > 0
-  become: true
-  changed_when: false
-
+- name: Display compose status
+  ansible.builtin.debug:
+    var: zerotier_compose

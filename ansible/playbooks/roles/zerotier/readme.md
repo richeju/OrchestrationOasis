@@ -1,6 +1,6 @@
 # Zerotier Role
 
-Installs [ZeroTier](https://www.zerotier.com/) on Linux systems and optionally joins a network.
+Deploys [ZeroTier](https://www.zerotier.com/) using Docker Compose and optionally joins a network.
 
 Example inventory entry:
 
@@ -11,5 +11,6 @@ host1 zerotier_network_id=abcd1234
 
 ## Variables
 
+- `zerotier_version`: Image tag to use (default `"latest"`).
+- `zerotier_dir`: Directory for the compose project (default `/opt/zerotier`).
 - `zerotier_network_id`: Network ID to join (default `""`). If empty, no network is joined.
-
