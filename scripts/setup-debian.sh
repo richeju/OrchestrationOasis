@@ -47,15 +47,24 @@ if ! dpkg -s fail2ban >/dev/null 2>&1; then
     $SUDO apt-get install -y fail2ban
 fi
 
-# Basic Fail2ban configuration
+
+# Minimal Fail2ban configuration
+$SUDO tee /etc/fail2ban/fail2ban.conf >/dev/null <<'EOF'
+[DEFAULT]
+loglevel = INFO
+logtarget = SYSLOG
+backend = systemd
+EOF
+
 $SUDO tee /etc/fail2ban/jail.local >/dev/null <<'EOF'
 [DEFAULT]
+backend = systemd
 bantime = 3600
-findtime = 600
 maxretry = 5
 
 [sshd]
 enabled = true
+filter = sshd
 EOF
 
 # Enable Fail2ban service
