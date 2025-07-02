@@ -1,9 +1,25 @@
+# ansible/playbooks/roles/fail2ban/tasks/main.yml
 ---
-- name: Install fail2ban package
+- name: Install fail2ban package via apt
   ansible.builtin.apt:
     name: fail2ban
     state: present
     update_cache: true
+  become: true
+
+- name: Check for sshd filter file
+  ansible.builtin.stat:
+    path: /etc/fail2ban/filter.d/sshd.conf
+  register: sshd_filter
+  become: true
+
+- name: Ensure sshd filter file exists with [Definition]
+  ansible.builtin.copy:
+    dest: /etc/fail2ban/filter.d/sshd.conf
+    content: "[Definition]\n"
+    mode: '0644'
+  when: not sshd_filter.stat.exists
+  notify: Reload fail2ban
   become: true
 
 - name: Deploy fail2ban configuration
@@ -11,10 +27,27 @@
     src: jail.local.j2
     dest: /etc/fail2ban/jail.local
     mode: '0644'
+  notify: Reload fail2ban
   become: true
 
-- name: Ensure fail2ban is enabled and running
-  ansible.builtin.service:
+- name: Clean fail2ban cache directory
+  ansible.builtin.file:
+    path: /var/lib/fail2ban
+    state: absent
+    recurse: true
+  become: true
+
+- name: Recreate fail2ban cache directory
+  ansible.builtin.file:
+    path: /var/lib/fail2ban
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+
+- name: Enable and start fail2ban service
+  ansible.builtin.systemd:
     name: fail2ban
     enabled: true
     state: started

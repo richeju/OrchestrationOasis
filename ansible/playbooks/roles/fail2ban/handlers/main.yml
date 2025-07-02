@@ -1,0 +1,7 @@
+# ansible/playbooks/roles/fail2ban/handlers/main.yml
+---
+- name: Reload fail2ban
+  ansible.builtin.systemd:
+    name: fail2ban
+    state: reloaded
+  become: true
