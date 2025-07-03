@@ -1,0 +1,4 @@
+---
+dashboard_version: "latest"
+dashboard_dir: "/opt/dashboard"
+dashboard_port: 4000

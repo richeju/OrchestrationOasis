@@ -1,0 +1,22 @@
+---
+- name: Ensure Dashboard directory exists
+  ansible.builtin.file:
+    path: "{{ dashboard_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Deploy docker-compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ dashboard_dir }}/docker-compose.yml"
+    mode: '0644'
+
+- name: Launch Dashboard stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ dashboard_dir }}"
+    state: present
+  register: dashboard_compose
+
+- name: Display compose status
+  ansible.builtin.debug:
+    var: dashboard_compose
