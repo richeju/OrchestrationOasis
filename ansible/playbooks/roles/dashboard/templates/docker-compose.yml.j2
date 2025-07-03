@@ -1,0 +1,11 @@
+version: '3'
+services:
+  dashboard:
+    image: lissy93/dashy:{{ dashboard_version }}
+    restart: unless-stopped
+    ports:
+      - "{{ dashboard_port }}:8080"
+    volumes:
+      - dashy-data:/app/user-data
+volumes:
+  dashy-data:

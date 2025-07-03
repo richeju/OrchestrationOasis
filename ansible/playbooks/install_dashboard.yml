@@ -1,0 +1,7 @@
+---
+- name: Install and configure Dashboard
+  hosts: dashboard
+  become: true
+  roles:
+    - dashboard
+
