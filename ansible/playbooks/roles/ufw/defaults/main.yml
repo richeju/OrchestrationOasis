@@ -2,3 +2,6 @@
 ufw_allowed_ports:
   - "80"
   - "443"
+
+# List of Docker-exposed host ports to block via the DOCKER-USER chain
+ufw_docker_blocked_ports: []

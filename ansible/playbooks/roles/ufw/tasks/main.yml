@@ -36,3 +36,42 @@
   community.general.ufw:
     state: enabled
   become: true
+
+# Configure Docker interaction via DOCKER-USER chain
+- name: Ensure DOCKER-USER chain exists
+  ansible.builtin.command: iptables -nL DOCKER-USER
+  changed_when: false
+  failed_when: false
+  register: docker_user_chain
+  become: true
+
+- name: Create DOCKER-USER chain if absent
+  ansible.builtin.command: iptables -N DOCKER-USER
+  when: docker_user_chain.rc != 0
+  become: true
+
+- name: Ensure RETURN rule exists in DOCKER-USER
+  ansible.builtin.command: iptables -C DOCKER-USER -j RETURN
+  changed_when: false
+  failed_when: false
+  register: docker_user_return
+  become: true
+
+- name: Add RETURN rule to DOCKER-USER
+  ansible.builtin.command: iptables -I DOCKER-USER -j RETURN
+  when: docker_user_return.rc != 0
+  become: true
+
+- name: Block Docker-exposed ports via DOCKER-USER
+  ansible.builtin.command: iptables -C DOCKER-USER -p tcp --dport {{ item }} -j DROP
+  with_items: "{{ ufw_docker_blocked_ports | default([]) }}"
+  changed_when: false
+  failed_when: false
+  register: docker_block_check
+  become: true
+
+- name: Insert DROP rules for Docker ports
+  ansible.builtin.command: iptables -I DOCKER-USER -p tcp --dport {{ item.item }} -j DROP
+  with_items: "{{ docker_block_check.results }}"
+  when: item.rc != 0
+  become: true

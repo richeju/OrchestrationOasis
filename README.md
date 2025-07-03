@@ -51,6 +51,15 @@ Set `zerotier_network_id` to join a specific network (leave empty to skip).
 
 To remove unnecessary packages while keeping Chocolatey, run `choco uninstall <package>` for each application you want to remove.
 
+To block ports exposed by Docker containers while keeping Docker's network stack
+active, define ports in `ufw_docker_blocked_ports`. The UFW role will insert
+rules into the `DOCKER-USER` chain:
+
+```yaml
+ufw_docker_blocked_ports:
+  - "4000"
+```
+
 
 ## Linting
 
