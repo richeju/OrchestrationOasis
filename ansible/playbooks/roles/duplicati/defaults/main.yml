@@ -1,0 +1,8 @@
+---
+duplicati_version: "latest"
+duplicati_dir: "/opt/duplicati"
+duplicati_puid: "1000"
+duplicati_pgid: "1000"
+duplicati_timezone: "Etc/UTC"
+duplicati_settings_key: ""
+duplicati_port: 8200

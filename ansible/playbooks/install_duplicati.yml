@@ -1,0 +1,6 @@
+---
+- name: Install and configure Duplicati
+  hosts: duplicati
+  become: true
+  roles:
+    - duplicati

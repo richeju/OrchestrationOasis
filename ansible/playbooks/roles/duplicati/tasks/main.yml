@@ -1,0 +1,22 @@
+---
+- name: Ensure Duplicati directory exists
+  ansible.builtin.file:
+    path: "{{ duplicati_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Deploy docker-compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ duplicati_dir }}/docker-compose.yml"
+    mode: '0644'
+
+- name: Launch Duplicati stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ duplicati_dir }}"
+    state: present
+  register: duplicati_compose
+
+- name: Display compose status
+  ansible.builtin.debug:
+    var: duplicati_compose
