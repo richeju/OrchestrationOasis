@@ -1,0 +1,22 @@
+version: '3'
+services:
+  duplicati:
+    image: lscr.io/linuxserver/duplicati:{{ duplicati_version }}
+    restart: unless-stopped
+    environment:
+      PUID: "{{ duplicati_puid }}"
+      PGID: "{{ duplicati_pgid }}"
+      TZ: "{{ duplicati_timezone }}"
+{% if duplicati_settings_key %}
+      SETTINGS_ENCRYPTION_KEY: "{{ duplicati_settings_key }}"
+{% endif %}
+    volumes:
+      - config:/config
+      - backups:/backups
+      - source:/source
+    ports:
+      - "{{ duplicati_port }}:8200"
+volumes:
+  config:
+  backups:
+  source:
