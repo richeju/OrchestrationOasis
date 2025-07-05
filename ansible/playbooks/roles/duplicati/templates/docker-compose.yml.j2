@@ -10,6 +10,7 @@ services:
 {% if duplicati_settings_key %}
       SETTINGS_ENCRYPTION_KEY: "{{ duplicati_settings_key }}"
 {% endif %}
+      DUPLICATI__WEBSERVICE_PASSWORD: "{{ duplicati_web_password }}"
     volumes:
       - config:/config
       - backups:/backups

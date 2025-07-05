@@ -11,5 +11,6 @@ Deploys [Duplicati](https://www.duplicati.com/) using Docker Compose.
 - `duplicati_timezone`: Time zone (default `Etc/UTC`)
 - `duplicati_settings_key`: Optional settings encryption key (default empty)
 - `duplicati_port`: Host port for the web UI (default `8200`)
+- `duplicati_web_password`: Password for the web UI (default `""`)
 
 Store sensitive values outside version control if required.
