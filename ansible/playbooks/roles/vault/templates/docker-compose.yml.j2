@@ -1,0 +1,16 @@
+version: '3'
+services:
+  vault:
+    image: hashicorp/vault:{{ vault_version }}
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: "{{ vault_dev_root_token_id }}"
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+    ports:
+      - "{{ vault_port }}:8200"
+    volumes:
+      - vault-data:/vault/file
+volumes:
+  vault-data:
