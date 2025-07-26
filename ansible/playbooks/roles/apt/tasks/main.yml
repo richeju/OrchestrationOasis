@@ -1,0 +1,23 @@
+---
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: "{{ apt_cache_valid_time }}"
+  become: true
+
+- name: Upgrade all packages
+  ansible.builtin.apt:
+    upgrade: "{{ apt_upgrade_type }}"
+  become: true
+
+- name: Autoremove unused packages
+  ansible.builtin.apt:
+    autoremove: true
+  when: apt_autoremove
+  become: true
+
+- name: Autoclean apt cache
+  ansible.builtin.apt:
+    autoclean: true
+  when: apt_autoclean
+  become: true
