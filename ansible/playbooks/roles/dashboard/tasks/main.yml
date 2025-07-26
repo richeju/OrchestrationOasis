@@ -28,6 +28,7 @@
   community.docker.docker_compose_v2:
     project_src: "{{ dashboard_dir }}"
     state: present
+    pull: always
   register: dashboard_compose
 
 - name: Display compose status
