@@ -1,11 +1,10 @@
-version: '3'
 services:
   dashy:
-    image: lissy93/dashy:latest
+    image: {{ dashboard_image }}
     restart: unless-stopped
     ports:
-      - "{{ zerotier_ip }}:4000:8080"
+      - "{{ zerotier_ip }}:{{ dashboard_port }}:8080"
     volumes:
-      - dashy-data:/app/user-data
+      - {{ dashboard_volume }}:/app/user-data
 volumes:
-  dashy-data:
+  {{ dashboard_volume }}:
