@@ -1,6 +1,6 @@
 ---
 - name: Install and configure Dashboard
-  hosts: dashboard
+  hosts: localhost
   become: true
   roles:
     - dashboard
