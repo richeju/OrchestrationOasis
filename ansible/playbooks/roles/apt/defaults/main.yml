@@ -1,0 +1,5 @@
+---
+apt_cache_valid_time: 3600
+apt_upgrade_type: dist
+apt_autoremove: true
+apt_autoclean: true
