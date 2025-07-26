@@ -1,16 +1,12 @@
 ---
-# Master playbook
-#
-# This file orchestrates the infrastructure by importing the individual
-# playbooks. To deploy incrementally, only the dashboard is executed by
-# default. Uncomment additional imports as you are ready to roll out more
-# services.
+- hosts: localhost
+  become: true
+  roles:
+    - docker
+    - ufw
+    - fail2ban
+    - duplicati
+    - dashboard
+    - semaphore
+    - zerotier
 
-- import_playbook: playbooks/install_dashboard.yml  # noqa name[play]
-
-# - import_playbook: playbooks/install_docker.yml
-# - import_playbook: playbooks/install_ufw.yml
-# - import_playbook: playbooks/install_fail2ban.yml
-# - import_playbook: playbooks/install_pcloud.yml
-# - import_playbook: playbooks/install_semaphore.yml
-# - import_playbook: playbooks/install_zerotier.yml

@@ -2,6 +2,8 @@
 name: Deploy
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -21,6 +23,5 @@ jobs:
 
       - name: Execute playbook
         working-directory: ansible
-        run: |
-          ansible-playbook -i inventories/production/hosts.yml site.yml --become
+        run: ansible-playbook -i inventories/production/hosts.yml site.yml --become
 
