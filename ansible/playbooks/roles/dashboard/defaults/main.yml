@@ -1,1 +1,5 @@
 ---
+dashboard_dir: "/opt/dashboard"
+dashboard_image: "lissy93/dashy:latest"
+dashboard_port: 4000
+dashboard_volume: "dashy-data"
