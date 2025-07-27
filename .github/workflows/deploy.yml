@@ -21,5 +21,7 @@ jobs:
 
       - name: Execute playbook
         working-directory: ansible
+        env:
+          PCLOUD_TOKEN: ${{ secrets.PCLOUD_TOKEN }}
         run: |
           ansible-playbook -i inventories/production/hosts.yml site.yml --become

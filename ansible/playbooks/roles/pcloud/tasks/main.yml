@@ -1,4 +1,9 @@
 ---
+- name: Set pCloud token from environment
+  ansible.builtin.set_fact:
+    pcloud_token: "{{ lookup('env', 'PCLOUD_TOKEN') }}"
+  when: lookup('env', 'PCLOUD_TOKEN') | default('') != ''
+
 - name: Retrieve pCloud token from Bitwarden
   ansible.builtin.set_fact:
     pcloud_token: >-
@@ -10,6 +15,7 @@
         client_secret=client_secret,
         password=password,
       ) }}
+  when: pcloud_token | default('') == ''
 
 - name: Install rclone
   ansible.builtin.apt:
