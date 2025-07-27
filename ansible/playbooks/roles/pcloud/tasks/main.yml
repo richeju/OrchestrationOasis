@@ -46,6 +46,42 @@
     group: "{{ pcloud_group }}"
   become: true
 
+- name: Check if mountpoint is already mounted
+  ansible.builtin.command: mountpoint -q {{ pcloud_mount_point }}
+  register: pcloud_mount_check
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: Look for leftover files in mountpoint
+  ansible.builtin.find:
+    paths: "{{ pcloud_mount_point }}"
+    file_type: any
+  register: pcloud_mount_files
+  when: pcloud_mount_check.rc != 0
+  become: true
+
+- name: Remove leftover files from mountpoint
+  ansible.builtin.file:
+    path: "{{ pcloud_mount_point }}"
+    state: absent
+  when:
+    - pcloud_mount_check.rc != 0
+    - pcloud_mount_files.matched > 0
+  become: true
+
+- name: Recreate mountpoint
+  ansible.builtin.file:
+    path: "{{ pcloud_mount_point }}"
+    state: directory
+    mode: '0770'
+    owner: root
+    group: "{{ pcloud_group }}"
+  when:
+    - pcloud_mount_check.rc != 0
+    - pcloud_mount_files.matched > 0
+  become: true
+
 - name: Create directory for rclone config
   ansible.builtin.file:
     path: "/etc/rclone"
