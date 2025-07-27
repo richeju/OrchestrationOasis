@@ -71,8 +71,9 @@ perform the additional checks.
      ```bash
      docker run --rm -v $(pwd):/github/workspace -e VALIDATE_ALL_CODEBASE=true -e VALIDATE_MARKDOWN=true -e VALIDATE_YAML=true -e VALIDATE_ANSIBLE=true -e DEFAULT_BRANCH=main github/super-linter:v5
      ```
-    - If warnings appear for `pcloud/templates/rclone.conf.j2` or `rclone-pcloud.service.j2`, add `---`.
-    - `---` has been added to these templates to satisfy the linter.
+    - If yamllint warns about `pcloud/templates/rclone.conf.j2` or `rclone-pcloud.service.j2`,
+      ignore the message or add `# yamllint disable-file` to the top of the template.
+      These files are not YAML, so adding `---` will break rclone and systemd.
 
 2. [x] **Integrate Bitwarden Web API**:
     - Delete `ansible/playbooks/roles/pcloud/vars/vault.yml`:
