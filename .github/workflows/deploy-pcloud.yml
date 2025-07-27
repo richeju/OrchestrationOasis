@@ -46,4 +46,7 @@ jobs:
           PCLOUD_TOKEN: ${{ secrets.PCLOUD_TOKEN }}
           ANSIBLE_DISPLAY_ARGS_TO_STDOUT: 'false'
         run: |
-          ansible-playbook playbooks/install_pcloud.yml -i inventories/production/hosts.yml --become
+          ansible-playbook playbooks/install_pcloud.yml \
+            -i inventories/production/hosts.yml \
+            -e "pcloud_hostname=eapi.pcloud.com pcloud_token=${PCLOUD_TOKEN}" \
+            --become
