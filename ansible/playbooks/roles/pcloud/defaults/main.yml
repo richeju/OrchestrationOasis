@@ -19,5 +19,6 @@ pcloud_rclone_options:
   - "--vfs-cache-mode full"
   - "--cache-dir /var/cache/rclone"
   - "--dir-cache-time 5m"
+  - "--nonempty"
   - "--log-level INFO"
   - "--log-file {{ pcloud_log_file }}"
