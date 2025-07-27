@@ -1,23 +1,23 @@
 # yamllint disable-file
 
 - name: "Kill existing rclone processes (if any)"
-  ansible.builtin.shell: "pkill -9 rclone"
-  ignore_errors: true
+  ansible.builtin.command: "pkill -9 rclone"
+  changed_when: false
   failed_when: false
 
 - name: "Attempt fusermount unmount"
-  ansible.builtin.shell: "fusermount -u /mnt/pcloud"
-  ignore_errors: true
+  ansible.builtin.command: "fusermount -u /mnt/pcloud"
+  changed_when: false
   failed_when: false
 
 - name: "Attempt lazy unmount"
-  ansible.builtin.shell: "umount -l /mnt/pcloud"
-  ignore_errors: true
+  ansible.builtin.command: "umount -l /mnt/pcloud"
+  changed_when: false
   failed_when: false
 
 - name: "Attempt force unmount"
-  ansible.builtin.shell: "umount -f /mnt/pcloud"
-  ignore_errors: true
+  ansible.builtin.command: "umount -f /mnt/pcloud"
+  changed_when: false
   failed_when: false
 
 - name: "Remove corrupted mountpoint (if needed)"
