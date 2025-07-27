@@ -1,148 +1,84 @@
----
-- name: Set pCloud token from environment
-  ansible.builtin.set_fact:
-    pcloud_token: "{{ lookup('env', 'PCLOUD_TOKEN') }}"
-  when: lookup('env', 'PCLOUD_TOKEN') | default('') != ''
+# yamllint disable-file
 
-- name: Retrieve pCloud token from Bitwarden
-  ansible.builtin.set_fact:
-    pcloud_token: >-
-      {{ lookup(
-        'bitwarden.secrets',
-        'item',
-        item_id=token_item_id,
-        client_id=client_id,
-        client_secret=client_secret,
-        password=password,
-      ) }}
-  when: pcloud_token | default('') == ''
-
-- name: Install rclone
-  ansible.builtin.apt:
-    name: rclone
-    state: present
-    update_cache: true
-  become: true
-
-- name: Install fuse for rclone
-  ansible.builtin.apt:
-    name: fuse
-    state: present
-  become: true
-
-- name: Create pcloud_users group
-  ansible.builtin.group:
-    name: "{{ pcloud_group }}"
-    gid: "{{ pcloud_gid }}"
-    state: present
-  become: true
-
-# -- FUSE/Rclone cleanup -----------------------------------------------------
-- name: Check for existing rclone mount process
-  ansible.builtin.shell: pgrep -f "rclone mount" || true
-  register: rclone_process
-  changed_when: false
+- name: "Kill existing rclone processes (if any)"
+  ansible.builtin.shell: "pkill -9 rclone"
+  ignore_errors: true
   failed_when: false
-  become: true
 
-- name: Kill rclone process if running
-  ansible.builtin.shell: killall rclone || true
-  when: rclone_process.rc == 0
-  changed_when: rclone_process.rc == 0
+- name: "Attempt fusermount unmount"
+  ansible.builtin.shell: "fusermount -u /mnt/pcloud"
+  ignore_errors: true
   failed_when: false
-  become: true
 
-- name: Unmount pcloud with fusermount
-  ansible.builtin.shell: >-
-    fusermount -u {{ pcloud_mount_point }} || true
-  changed_when: false
+- name: "Attempt lazy unmount"
+  ansible.builtin.shell: "umount -l /mnt/pcloud"
+  ignore_errors: true
   failed_when: false
-  become: true
 
-- name: Lazy unmount pcloud
-  ansible.builtin.shell: >-
-    umount -l {{ pcloud_mount_point }} || true
-  changed_when: false
+- name: "Attempt force unmount"
+  ansible.builtin.shell: "umount -f /mnt/pcloud"
+  ignore_errors: true
   failed_when: false
-  become: true
 
-- name: Force unmount pcloud if needed
-  ansible.builtin.shell: >-
-    umount -f {{ pcloud_mount_point }} || true
-  changed_when: false
-  failed_when: false
-  become: true
-
-- name: Remove mount directory if present
+- name: "Remove corrupted mountpoint (if needed)"
   ansible.builtin.file:
-    path: "{{ pcloud_mount_point }}"
+    path: /mnt/pcloud
     state: absent
-  become: true
 
-- name: Recreate empty mount directory
+- name: "Recreate mountpoint"
   ansible.builtin.file:
-    path: "{{ pcloud_mount_point }}"
+    path: /mnt/pcloud
     state: directory
     owner: root
-    group: "{{ pcloud_group }}"
-    mode: '0770'
-  become: true
+    group: pcloud_users
+    mode: "0770"
 
-
-- name: Create directory for rclone config
+- name: "Create directory for rclone config"
   ansible.builtin.file:
-    path: "/etc/rclone"
+    path: /etc/rclone
     state: directory
-    mode: '0755'
     owner: root
     group: root
-  become: true
+    mode: "0755"
 
-- name: Configure rclone credentials file
+- name: "Configure rclone credentials file"
   ansible.builtin.template:
     src: rclone.conf.j2
-    dest: "{{ pcloud_config_file }}"
-    mode: '0600'
+    dest: /etc/rclone/rclone.conf
     owner: root
     group: root
-  become: true
+    mode: "0600"
 
-- name: Create log file for rclone
+- name: "Create log file for rclone"
   ansible.builtin.file:
-    path: "{{ pcloud_log_file }}"
+    path: /var/log/rclone.log
     state: touch
-    mode: '0644'
     owner: root
     group: root
-  become: true
+    mode: "0644"
 
-- name: Create rclone cache directory
+- name: "Create rclone cache directory"
   ansible.builtin.file:
-    path: "/var/cache/rclone"
+    path: /var/cache/rclone
     state: directory
-    mode: '0755'
     owner: root
     group: root
-  become: true
+    mode: "0755"
 
-- name: Generate rclone-pcloud systemd service
+- name: "Generate rclone-pcloud systemd service"
   ansible.builtin.template:
     src: rclone-pcloud.service.j2
-    dest: "{{ pcloud_service_file }}"
-    mode: '0644'
+    dest: /etc/systemd/system/rclone-pcloud.service
     owner: root
     group: root
-  become: true
+    mode: "0644"
 
-- name: Reload systemd daemon
+- name: "Reload systemd daemon"
   ansible.builtin.systemd:
     daemon_reload: true
-  become: true
 
-
-- name: Enable and start rclone-pcloud service
+- name: "Enable and start rclone-pcloud service"
   ansible.builtin.systemd:
     name: rclone-pcloud.service
+    state: restarted
     enabled: true
-    state: started
-  become: true
