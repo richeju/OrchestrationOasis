@@ -1,5 +1,0 @@
----
-vault_version: "latest"
-vault_dir: "/opt/vault"
-vault_port: 8201
-vault_dev_root_token_id: "root"
