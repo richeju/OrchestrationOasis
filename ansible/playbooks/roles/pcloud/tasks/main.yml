@@ -37,50 +37,57 @@
     state: present
   become: true
 
-- name: Create mountpoint
-  ansible.builtin.file:
-    path: "{{ pcloud_mount_point }}"
-    state: directory
-    mode: '0770'
-    owner: root
-    group: "{{ pcloud_group }}"
-  become: true
-
-- name: Check if mountpoint is already mounted
-  ansible.builtin.command: mountpoint -q {{ pcloud_mount_point }}
-  register: pcloud_mount_check
+# -- FUSE/Rclone cleanup -----------------------------------------------------
+- name: Check for existing rclone mount process
+  ansible.builtin.shell: pgrep -f "rclone mount" || true
+  register: rclone_process
   changed_when: false
   failed_when: false
   become: true
 
-- name: Look for leftover files in mountpoint
-  ansible.builtin.find:
-    paths: "{{ pcloud_mount_point }}"
-    file_type: any
-  register: pcloud_mount_files
-  when: pcloud_mount_check.rc != 0
+- name: Kill rclone process if running
+  ansible.builtin.shell: killall rclone || true
+  when: rclone_process.rc == 0
+  changed_when: rclone_process.rc == 0
+  failed_when: false
   become: true
 
-- name: Remove leftover files from mountpoint
+- name: Unmount pcloud with fusermount
+  ansible.builtin.shell: >-
+    fusermount -u {{ pcloud_mount_point }} || true
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: Lazy unmount pcloud
+  ansible.builtin.shell: >-
+    umount -l {{ pcloud_mount_point }} || true
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: Force unmount pcloud if needed
+  ansible.builtin.shell: >-
+    umount -f {{ pcloud_mount_point }} || true
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: Remove mount directory if present
   ansible.builtin.file:
     path: "{{ pcloud_mount_point }}"
     state: absent
-  when:
-    - pcloud_mount_check.rc != 0
-    - pcloud_mount_files.matched > 0
   become: true
 
-- name: Recreate mountpoint
+- name: Recreate empty mount directory
   ansible.builtin.file:
     path: "{{ pcloud_mount_point }}"
     state: directory
-    mode: '0770'
     owner: root
     group: "{{ pcloud_group }}"
-  when:
-    - pcloud_mount_check.rc != 0
-    - pcloud_mount_files.matched > 0
+    mode: '0770'
   become: true
+
 
 - name: Create directory for rclone config
   ansible.builtin.file:
@@ -132,49 +139,6 @@
     daemon_reload: true
   become: true
 
-# Clean up any existing rclone mount before (re)starting the service
-- name: Check for existing rclone mount process
-  ansible.builtin.shell: pgrep -f "rclone mount pcloud:" || true
-  register: rclone_process
-  changed_when: false
-  failed_when: false
-
-- name: Kill rclone process if running
-  ansible.builtin.shell: killall rclone || true
-  when: rclone_process.rc == 0
-  changed_when: rclone_process.rc == 0
-  failed_when: false
-
-- name: Unmount pcloud with fusermount
-  ansible.builtin.shell: >-
-    fusermount -u {{ pcloud_mount_point }} || true
-  changed_when: false
-  failed_when: false
-
-- name: Lazy unmount pcloud
-  ansible.builtin.shell: >-
-    umount -l {{ pcloud_mount_point }} || true
-  changed_when: false
-  failed_when: false
-
-- name: Force unmount pcloud if needed
-  ansible.builtin.shell: >-
-    umount -f {{ pcloud_mount_point }} || true
-  changed_when: false
-  failed_when: false
-
-- name: Remove mount directory if present
-  ansible.builtin.file:
-    path: "{{ pcloud_mount_point }}"
-    state: absent
-
-- name: Recreate empty mount directory
-  ansible.builtin.file:
-    path: "{{ pcloud_mount_point }}"
-    state: directory
-    owner: root
-    group: "{{ pcloud_group }}"
-    mode: '0770'
 
 - name: Enable and start rclone-pcloud service
   ansible.builtin.systemd:
