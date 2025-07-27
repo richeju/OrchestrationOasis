@@ -77,6 +77,16 @@
   ansible.builtin.systemd:
     daemon_reload: true
 
+- name: "Ensure pCloud mountpoint is healthy before starting"
+  ansible.builtin.stat:
+    path: /mnt/pcloud
+  register: pcloud_mountpoint
+
+- name: "Fail if pcloud is not mounted or inaccessible"
+  ansible.builtin.fail:
+    msg: "/mnt/pcloud is not properly mounted. Aborting before damaging remote storage."
+  when: not pcloud_mountpoint.stat.exists or pcloud_mountpoint.stat.isdir is not defined
+
 - name: "Enable and start rclone-pcloud service"
   ansible.builtin.systemd:
     name: rclone-pcloud.service
