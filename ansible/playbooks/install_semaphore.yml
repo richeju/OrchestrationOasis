@@ -1,6 +1,0 @@
----
-- name: Install and configure Semaphore
-  hosts: semaphore
-  become: true
-  roles:
-    - semaphore

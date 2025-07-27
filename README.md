@@ -1,14 +1,13 @@
 # Orchestration Oasis
 
-Orchestration Oasis is an infrastructure automation project built around **Ansible**. It currently features roles for Docker, UFW, Fail2ban, pCloud, Semaphore, Zerotier, and Duplicati, and a Dashy-based Dashboard (using Docker Compose) to help configure a Debian 12 server.
+Orchestration Oasis is an infrastructure automation project built around **Ansible**. It currently features roles for Docker, UFW, Fail2ban, pCloud, Zerotier, and Duplicati, and a Dashy-based Dashboard (using Docker Compose) to help configure a Debian 12 server.
 Windows hosts can also be provisioned using Chocolatey. A dedicated role installs Chocolatey, and another role installs the optional Chocolatey GUI.
 The list below tracks the remaining work before the first stable release.
 
 ## Setup
 
 Run the helper script to install Docker and Fail2ban on a fresh Debian system.
-Ansible is included with the Semaphore container, so it does not need to be installed on
-the host. The script is non-interactive, installs Git and optionally clones a
+The script is non-interactive, installs Git and optionally clones a
 repository if a URL is provided. Docker and Fail2ban are configured with a basic setup and the script skips packages that are already installed:
 
 ```bash
@@ -102,7 +101,7 @@ perform the additional checks.
     - Create `examples/inventory.yml` with Bitwarden variables (`client_id`, `client_secret`, `password`, `token_item_id`).
 
 7. [ ] **Test on Debian 12**:
-    - Run playbooks, verify services (Docker, pCloud, UFW, Semaphore).
+    - Run playbooks, verify services (Docker, pCloud, UFW).
     - Test Molecule locally:
      ```bash
      pip install molecule[docker] docker
