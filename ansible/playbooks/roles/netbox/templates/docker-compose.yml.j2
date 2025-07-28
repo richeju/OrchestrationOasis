@@ -23,7 +23,7 @@ services:
     env_file:
       - netbox.env
     ports:
-      - "8080:8080"
+      - "{{ zerotier_ip }}:{{ netbox_port }}:8080"
     volumes:
       - netbox-media:/opt/netbox/netbox/media
     restart: unless-stopped

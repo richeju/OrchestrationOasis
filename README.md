@@ -1,6 +1,6 @@
 # Orchestration Oasis
 
-Orchestration Oasis is an infrastructure automation project built around **Ansible**. It currently features roles for Docker, UFW, Fail2ban, pCloud, Zerotier, and Duplicati, and a Dashy-based Dashboard (using Docker Compose) to help configure a Debian 12 server.
+Orchestration Oasis is an infrastructure automation project built around **Ansible**. It currently features roles for Docker, UFW, Fail2ban, pCloud, Zerotier, Duplicati, and NetBox, and a Dashy-based Dashboard (using Docker Compose) to help configure a Debian 12 server.
 Windows hosts can also be provisioned using Chocolatey. A dedicated role installs Chocolatey, and another role installs the optional Chocolatey GUI.
 The list below tracks the remaining work before the first stable release.
 
