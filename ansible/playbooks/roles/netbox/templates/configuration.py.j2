@@ -26,3 +26,13 @@ if not SECRET_KEY or len(SECRET_KEY) < 50:
     raise ImproperlyConfigured(
         "SECRET_KEY must be set and be at least 50 characters long."
     )
+
+DATABASE = {
+    'NAME': os.getenv('DB_NAME'),
+    'USER': os.getenv('DB_USER'),
+    'PASSWORD': os.getenv('DB_PASSWORD'),
+    'HOST': os.getenv('DB_HOST'),
+    'PORT': os.getenv('DB_PORT', '5432'),
+    'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', 300)),
+    'ENGINE': 'django.db.backends.postgresql',
+}
