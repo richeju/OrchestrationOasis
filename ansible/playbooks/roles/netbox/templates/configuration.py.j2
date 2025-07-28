@@ -12,3 +12,11 @@ REDIS = {
         'SSL': False,
     },
 }
+
+import os
+
+raw_allowed_hosts = os.getenv('ALLOWED_HOSTS')
+if raw_allowed_hosts:
+    ALLOWED_HOSTS = [h.strip() for h in raw_allowed_hosts.split(',') if h.strip()]
+else:
+    ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
