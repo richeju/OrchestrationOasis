@@ -11,8 +11,6 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     command: redis-server --appendonly yes
-    env_file:
-      - redis.env
     volumes:
       - redis:/data
   netbox:
@@ -25,6 +23,7 @@ services:
     ports:
       - "{{ zerotier_ip }}:{{ netbox_port }}:8080"
     volumes:
+      - ./configuration.py:/etc/netbox/config/configuration.py:ro
       - netbox-media:/opt/netbox/netbox/media
     restart: unless-stopped
 volumes:
