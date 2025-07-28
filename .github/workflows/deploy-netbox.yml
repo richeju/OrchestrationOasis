@@ -1,0 +1,54 @@
+---
+name: Deploy NetBox
+
+on:
+  push:
+    paths:
+      - 'ansible/playbooks/roles/netbox/**'
+      - 'ansible/playbooks/install_netbox.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '25 3 * * 1'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install Ansible and ansible-lint
+        run: |
+          pip install ansible ansible-lint
+      - name: Run ansible-lint
+        env:
+          ANSIBLE_CONFIG: ansible/ansible.cfg
+        run: ansible-lint ansible/
+
+  deploy:
+    needs: lint
+    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: self-hosted
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r ansible/requirements.yml
+      - name: Execute playbook
+        working-directory: ansible
+        env:
+          NETBOX_DB_PASSWORD: ${{ secrets.NETBOX_DB_PASSWORD }}
+          NETBOX_REDIS_PASSWORD: ${{ secrets.NETBOX_REDIS_PASSWORD }}
+          NETBOX_SECRET_KEY: ${{ secrets.NETBOX_SECRET_KEY }}
+          ANSIBLE_DISPLAY_ARGS_TO_STDOUT: 'false'
+        run: |
+          ansible-playbook playbooks/install_netbox.yml -i inventories/production/hosts.yml \
+            -e "netbox_db_password=${NETBOX_DB_PASSWORD} netbox_redis_password=${NETBOX_REDIS_PASSWORD} netbox_secret_key=${NETBOX_SECRET_KEY}" \
+            --become

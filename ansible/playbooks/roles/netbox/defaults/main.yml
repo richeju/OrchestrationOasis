@@ -6,3 +6,4 @@ netbox_db_user: "netbox"
 netbox_db_password: "netbox"
 netbox_redis_password: "netbox"
 netbox_secret_key: "change-me"
+netbox_port: 8080
