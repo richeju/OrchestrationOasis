@@ -20,3 +20,9 @@ if raw_allowed_hosts:
     ALLOWED_HOSTS = [h.strip() for h in raw_allowed_hosts.split(',') if h.strip()]
 else:
     ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY or len(SECRET_KEY) < 50:
+    raise ImproperlyConfigured(
+        "SECRET_KEY must be set and be at least 50 characters long."
+    )
