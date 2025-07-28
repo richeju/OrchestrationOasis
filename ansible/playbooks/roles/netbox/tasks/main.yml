@@ -26,9 +26,14 @@
   loop:
     - { src: 'netbox.env.j2', dest: 'netbox.env' }
     - { src: 'postgres.env.j2', dest: 'postgres.env' }
-    - { src: 'redis.env.j2', dest: 'redis.env' }
   loop_control:
     label: "{{ item.dest }}"
+
+- name: Deploy NetBox configuration
+  ansible.builtin.template:
+    src: configuration.py.j2
+    dest: "{{ netbox_dir }}/configuration.py"
+    mode: '0644'
 
 - name: Deploy docker-compose file
   ansible.builtin.template:
