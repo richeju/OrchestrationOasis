@@ -8,3 +8,5 @@ collections:
     version: ">=3.0.0"
   - name: chocolatey.chocolatey
     version: ">=1.0.0"
+  - name: netbox.netbox
+    version: ">=3.14.0"
