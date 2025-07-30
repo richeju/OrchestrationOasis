@@ -1,0 +1,21 @@
+---
+- name: Clean up Docker resources
+  hosts: all
+  become: true
+  tasks:
+    - name: Remove stopped containers
+      community.docker.docker_prune:
+        containers: true
+      changed_when: false
+
+    - name: Remove unused images
+      community.docker.docker_prune:
+        images: true
+        images_filters:
+          dangling: false
+      changed_when: false
+
+    - name: Remove unused networks
+      community.docker.docker_prune:
+        networks: true
+      changed_when: false
