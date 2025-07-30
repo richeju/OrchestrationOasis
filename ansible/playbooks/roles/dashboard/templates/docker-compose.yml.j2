@@ -3,7 +3,7 @@ services:
     image: {{ dashboard_image }}
     restart: unless-stopped
     ports:
-      - "{{ zerotier_ip }}:{{ dashboard_port }}:8080"
+      - "{{ dashboard_zerotier_ip }}:{{ dashboard_port }}:8080"
     volumes:
       - {{ dashboard_volume }}:/app/user-data
 volumes:
