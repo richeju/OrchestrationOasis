@@ -1,0 +1,7 @@
+# ansible/playbooks/roles/bind_dns/handlers/main.yml
+---
+- name: Restart BIND
+  community.docker.docker_container:
+    name: bind_dns
+    image: "{{ bind_dns_image }}"
+    restart: true

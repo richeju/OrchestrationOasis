@@ -1,0 +1,19 @@
+$TTL 3600
+@   IN  SOA ns1.{{ bind_dns_domain }}. admin.{{ bind_dns_domain }}. (
+        {{ zone_serial }} ; Serial
+        3600        ; Refresh
+        900         ; Retry
+        604800      ; Expire
+        86400 )     ; Negative Cache TTL
+
+@   IN  NS  ns1.{{ bind_dns_domain }}.
+ns1 IN A {{ ansible_default_ipv4.address }}
+
+{% for host in dns_records %}
+{% set name = host.dns_name | default(host.assigned_object.hostname | default(host.assigned_object.name | default(''))) %}
+{% if name and name.endswith('.' + bind_dns_domain) %}
+{{ name.split('.' + bind_dns_domain)[0] }} IN A {{ host.address.split('/')[0] }}
+{% elif name %}
+{{ name }} IN A {{ host.address.split('/')[0] }}
+{% endif %}
+{% endfor %}

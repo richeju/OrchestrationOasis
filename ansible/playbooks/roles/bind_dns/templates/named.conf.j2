@@ -1,0 +1,23 @@
+options {
+    directory "/var/cache/bind";
+    listen-on port 53 { any; };
+    allow-query { any; };
+    recursion yes;
+    forwarders {
+{% for fwd in bind_dns_forwarders %}
+        {{ fwd }};
+{% endfor %}
+    };
+};
+
+zone "{{ bind_dns_domain }}" IN {
+    type master;
+    file "/etc/bind/zones/db.{{ bind_dns_domain }}";
+    allow-update { none; };
+};
+
+zone "{{ bind_dns_reverse_prefix }}.in-addr.arpa" IN {
+    type master;
+    file "/etc/bind/zones/db.{{ bind_dns_reverse_prefix }}.in-addr.arpa";
+    allow-update { none; };
+};
