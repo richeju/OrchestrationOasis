@@ -1,0 +1,12 @@
+---
+bind_dns_domain: home.local
+bind_dns_reverse_prefix: 10.168.192
+bind_dns_dir: /opt/bind
+bind_dns_image: internetsystemsconsortium/bind9:9.18
+bind_dns_forwarders:
+  - 1.1.1.1
+  - 9.9.9.9
+bind_dns_configure_resolver: false
+bind_dns_zones:
+  - "{{ bind_dns_domain }}"
+bind_dns_compose_path: "{{ bind_dns_dir }}"

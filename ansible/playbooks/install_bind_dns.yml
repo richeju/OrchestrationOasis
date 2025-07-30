@@ -1,0 +1,6 @@
+---
+- name: Install and configure BIND DNS
+  hosts: bind_dns
+  become: true
+  roles:
+    - bind_dns

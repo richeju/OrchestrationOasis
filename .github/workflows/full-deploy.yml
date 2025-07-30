@@ -1,7 +1,7 @@
 ---
 name: Full Deploy
 
-on:
+'on':
   workflow_dispatch:
 
 jobs:

@@ -10,7 +10,7 @@
 - name: Check for sshd filter file
   ansible.builtin.stat:
     path: /etc/fail2ban/filter.d/sshd.conf
-  register: sshd_filter
+  register: fail2ban_sshd_filter
   become: true
 
 - name: Ensure sshd filter file exists with [Definition]
@@ -18,7 +18,7 @@
     dest: /etc/fail2ban/filter.d/sshd.conf
     content: "[Definition]\n"
     mode: '0644'
-  when: not sshd_filter.stat.exists
+  when: not fail2ban_sshd_filter.stat.exists
   notify: Reload fail2ban
   become: true
 

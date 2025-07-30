@@ -1,7 +1,7 @@
 ---
 name: Deploy Dashboard
 
-on:
+'on':
   push:
     branches:
       - main

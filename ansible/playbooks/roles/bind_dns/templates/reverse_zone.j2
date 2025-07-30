@@ -1,0 +1,18 @@
+$TTL 3600
+@   IN  SOA ns1.{{ bind_dns_domain }}. admin.{{ bind_dns_domain }}. (
+        {{ zone_serial }} ; Serial
+        3600        ; Refresh
+        900         ; Retry
+        604800      ; Expire
+        86400 )     ; Negative Cache TTL
+
+@   IN  NS  ns1.{{ bind_dns_domain }}.
+
+{% for host in dns_records %}
+{% set ip = host.address.split('/')[0] %}
+{% set octets = ip.split('.') %}
+{% set forward_prefix = bind_dns_reverse_prefix.split('.') | reverse | join('.') %}
+{% if ip.startswith(forward_prefix + '.') %}
+{{ octets[3] }} IN PTR {{ host.dns_name | default(host.assigned_object.name) }}.
+{% endif %}
+{% endfor %}

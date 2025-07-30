@@ -1,7 +1,7 @@
 ---
 name: Deploy Duplicati
 
-on:
+'on':
   schedule:
     - cron: '30 4 * * *'
   workflow_dispatch:

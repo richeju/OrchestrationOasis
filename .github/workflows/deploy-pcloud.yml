@@ -1,7 +1,7 @@
 ---
 name: Deploy pCloud
 
-on:
+'on':
   push:
     branches:
       - main

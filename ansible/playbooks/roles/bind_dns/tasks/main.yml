@@ -1,0 +1,131 @@
+# ansible/playbooks/roles/bind_dns/tasks/main.yml
+---
+- name: Ensure Docker is installed
+  ansible.builtin.include_role:
+    name: docker
+
+- name: Ensure dnsutils is installed
+  ansible.builtin.package:
+    name: dnsutils
+    state: present
+
+- name: Detect ZeroTier interface
+  ansible.builtin.set_fact:
+    bind_dns_zerotier_interface: "{{ ansible_interfaces | select('match', '^zt') | list | first | default('') }}"
+
+- name: Fail if ZeroTier interface not found
+  ansible.builtin.fail:
+    msg: "No ZeroTier interface found"
+  when: bind_dns_zerotier_interface | length == 0
+
+- name: Gather ZeroTier IP address
+  ansible.builtin.set_fact:
+    bind_dns_zerotier_ip: "{{ hostvars[inventory_hostname]['ansible_' ~ bind_dns_zerotier_interface]['ipv4']['address'] }}"
+
+- name: Ensure bind_dns directory exists
+  ansible.builtin.file:
+    path: "{{ bind_dns_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Ensure zones directory exists
+  ansible.builtin.file:
+    path: "{{ bind_dns_dir }}/zones"
+    state: directory
+    mode: '0755'
+
+- name: Query NetBox for IP addresses
+  ansible.builtin.uri:
+    url: "{{ netbox_url }}/api/ipam/ip-addresses/?limit=0"
+    method: GET
+    headers:
+      Authorization: "Token {{ netbox_token }}"
+      Accept: application/json
+    return_content: true
+    validate_certs: false
+  register: bind_dns_netbox_hosts
+
+- name: Deploy forward zone file
+  ansible.builtin.template:
+    src: zone.j2
+    dest: "{{ bind_dns_dir }}/zones/db.{{ bind_dns_domain }}"
+    mode: '0644'
+  vars:
+    dns_records: "{{ bind_dns_netbox_hosts.json.results }}"
+    zone_serial: "{{ '%Y%m%d%H' | strftime }}"
+  notify: restart bind
+
+- name: Deploy reverse zone file
+  ansible.builtin.template:
+    src: reverse_zone.j2
+    dest: "{{ bind_dns_dir }}/zones/db.{{ bind_dns_reverse_prefix }}.in-addr.arpa"
+    mode: '0644'
+  vars:
+    dns_records: "{{ bind_dns_netbox_hosts.json.results }}"
+    zone_serial: "{{ '%Y%m%d%H' | strftime }}"
+  notify: restart bind
+
+- name: Deploy named.conf
+  ansible.builtin.template:
+    src: named.conf.j2
+    dest: "{{ bind_dns_dir }}/named.conf"
+    mode: '0644'
+  notify: restart bind
+
+- name: Check docker compose availability
+  ansible.builtin.command: docker compose version
+  register: bind_dns_compose_version
+  changed_when: false
+  failed_when: bind_dns_compose_version.rc != 0
+
+- name: Ensure compose directory exists
+  ansible.builtin.file:
+    path: "{{ bind_dns_compose_path }}"
+    state: directory
+    mode: '0755'
+
+- name: Deploy docker-compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ bind_dns_compose_path }}/docker-compose.yml"
+    mode: '0644'
+  notify: restart bind
+
+- name: Launch bind container
+  ansible.builtin.command: docker compose up -d
+  args:
+    chdir: "{{ bind_dns_compose_path }}"
+  register: bind_dns_compose_up
+  changed_when: "'Recreating' in bind_dns_compose_up.stdout or 'Creating' in bind_dns_compose_up.stdout or 'Starting' in bind_dns_compose_up.stdout"
+
+- name: Display compose output
+  ansible.builtin.debug:
+    var: bind_dns_compose_up.stdout
+
+- name: Wait for DNS to respond
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 53
+    timeout: 30
+
+- name: Set test record facts
+  ansible.builtin.set_fact:
+    bind_dns_test_ip: "{{ bind_dns_netbox_hosts.json.results[0].address.split('/')[0] if bind_dns_netbox_hosts.json.results | length > 0 else '' }}"
+    bind_dns_test_name: "{{ bind_dns_netbox_hosts.json.results[0].dns_name if bind_dns_netbox_hosts.json.results | length > 0 else '' }}"
+
+- name: Test forward resolution
+  ansible.builtin.command: "dig @127.0.0.1 {{ bind_dns_test_name }}"
+  changed_when: false
+  when: bind_dns_test_name != ''
+
+- name: Test reverse resolution
+  ansible.builtin.command: "dig @127.0.0.1 -x {{ bind_dns_test_ip }}"
+  changed_when: false
+  when: bind_dns_test_ip != ''
+
+- name: Configure local resolver
+  ansible.builtin.lineinfile:
+    path: /etc/resolv.conf
+    line: "nameserver 127.0.0.1"
+    insertbefore: BOF
+  when: bind_dns_configure_resolver
