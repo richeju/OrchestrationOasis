@@ -17,7 +17,7 @@ The container is managed using `docker compose` with a generated compose file.
 - `bind_dns_compose_path`: Directory where `docker-compose.yml` is generated (defaults to `bind_dns_dir`)
 
 Example zone output (`zone.j2`):
-```
+```text
 $TTL 3600
 @   IN SOA ns1.home.local. admin.home.local. (
         2024010101 ; Serial
