@@ -1,8 +1,11 @@
 # ansible/playbooks/roles/bind_dns/handlers/main.yml
 ---
-- name: restart bind
+- name: Restart bind
   ansible.builtin.command: docker compose up -d
   args:
-    chdir: "{{ bind_compose_path }}"
-  register: compose_restart
-  changed_when: "'Recreating' in compose_restart.stdout or 'Creating' in compose_restart.stdout or 'Starting' in compose_restart.stdout"
+    chdir: "{{ bind_dns_compose_path }}"
+  register: bind_dns_compose_restart
+  changed_when: >
+    'Recreating' in bind_dns_compose_restart.stdout or
+    'Creating' in bind_dns_compose_restart.stdout or
+    'Starting' in bind_dns_compose_restart.stdout

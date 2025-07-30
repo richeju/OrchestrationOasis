@@ -1,7 +1,7 @@
 ---
 name: Deploy NetBox
 
-on:
+'on':
   push:
     paths:
       - 'ansible/playbooks/roles/netbox/**'

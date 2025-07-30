@@ -74,33 +74,33 @@
 
 - name: Check docker compose availability
   ansible.builtin.command: docker compose version
-  register: compose_version
+  register: bind_dns_compose_version
   changed_when: false
-  failed_when: compose_version.rc != 0
+  failed_when: bind_dns_compose_version.rc != 0
 
 - name: Ensure compose directory exists
   ansible.builtin.file:
-    path: "{{ bind_compose_path }}"
+    path: "{{ bind_dns_compose_path }}"
     state: directory
     mode: '0755'
 
 - name: Deploy docker-compose file
   ansible.builtin.template:
     src: docker-compose.yml.j2
-    dest: "{{ bind_compose_path }}/docker-compose.yml"
+    dest: "{{ bind_dns_compose_path }}/docker-compose.yml"
     mode: '0644'
   notify: restart bind
 
 - name: Launch bind container
   ansible.builtin.command: docker compose up -d
   args:
-    chdir: "{{ bind_compose_path }}"
-  register: compose_up
-  changed_when: "'Recreating' in compose_up.stdout or 'Creating' in compose_up.stdout or 'Starting' in compose_up.stdout"
+    chdir: "{{ bind_dns_compose_path }}"
+  register: bind_dns_compose_up
+  changed_when: "'Recreating' in bind_dns_compose_up.stdout or 'Creating' in bind_dns_compose_up.stdout or 'Starting' in bind_dns_compose_up.stdout"
 
 - name: Display compose output
   ansible.builtin.debug:
-    var: compose_up.stdout
+    var: bind_dns_compose_up.stdout
 
 - name: Wait for DNS to respond
   ansible.builtin.wait_for:
