@@ -1,0 +1,27 @@
+---
+name: Docker Cleanup
+
+'on':
+  schedule:
+    - cron: '15 3 * * 0'
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r ansible/requirements.yml
+
+      - name: Execute cleanup playbook
+        working-directory: ansible
+        run: |
+          ansible-playbook playbooks/docker_cleanup.yml -i inventories/production/hosts.yml --become
