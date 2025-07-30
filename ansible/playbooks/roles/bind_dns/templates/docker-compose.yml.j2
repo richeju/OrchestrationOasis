@@ -1,0 +1,12 @@
+version: '3'
+services:
+  bind:
+    image: {{ bind_dns_image }}
+    container_name: bind_dns
+    restart: unless-stopped
+    volumes:
+      - ./named.conf:/etc/bind/named.conf:ro
+      - ./zones:/zones
+    ports:
+      - "{{ bind_dns_zerotier_ip }}:53:53/tcp"
+      - "{{ bind_dns_zerotier_ip }}:53:53/udp"

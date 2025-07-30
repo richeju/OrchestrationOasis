@@ -1,0 +1,6 @@
+# ansible/playbooks/roles/bind_dns/handlers/main.yml
+---
+- name: Restart BIND
+  community.docker.docker_compose_v2:
+    project_src: "{{ bind_dns_dir }}"
+    state: present

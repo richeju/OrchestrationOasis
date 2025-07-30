@@ -1,0 +1,28 @@
+# bind_dns Role
+
+Deploys a BIND9 DNS server inside Docker and generates zone files from NetBox.
+
+## Variables
+
+- `bind_dns_domain`: DNS domain to manage (default `home.local`)
+- `bind_dns_dir`: Directory for configuration and compose file (default `/opt/bind`)
+- `bind_dns_image`: Docker image tag (default `internetsystemsconsortium/bind9:9.18`)
+- `bind_dns_forwarders`: List of DNS forwarder IPs
+- `netbox_url`: Base URL for the NetBox API
+- `netbox_token`: API token for NetBox
+- `zerotier_ip`: IP address of the ZeroTier interface (auto-detected). Ports are bound to this address so BIND listens only on ZeroTier
+
+Example zone output (`zone.j2`):
+```
+$TTL 3600
+@   IN SOA ns1.home.local. admin.home.local. (
+        2024010101 ; Serial
+        3600       ; Refresh
+        900        ; Retry
+        604800     ; Expire
+        86400 )    ; Negative Cache TTL
+
+@   IN NS ns1.home.local.
+ns1 IN A 192.168.1.10
+host1 IN A 192.168.1.20
+```

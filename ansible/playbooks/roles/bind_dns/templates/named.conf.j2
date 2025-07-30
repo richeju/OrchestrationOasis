@@ -1,0 +1,19 @@
+options {
+    directory "/var/cache/bind";
+    listen-on port 53 { any; };
+    allow-query { any; };
+    recursion yes;
+{% if bind_dns_forwarders | length > 0 %}
+    forwarders {
+{% for fwd in bind_dns_forwarders %}
+        {{ fwd }};
+{% endfor %}
+    };
+{% endif %}
+};
+
+zone "{{ bind_dns_domain }}" IN {
+    type master;
+    file "/zones/db.{{ bind_dns_domain }}";
+    allow-update { none; };
+};
