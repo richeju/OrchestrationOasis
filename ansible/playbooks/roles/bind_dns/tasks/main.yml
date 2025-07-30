@@ -72,22 +72,35 @@
     mode: '0644'
   notify: restart bind
 
-- name: Launch bind container
-  community.docker.docker_container:
-    name: bind_dns
-    image: "{{ bind_dns_image }}"
-    restart_policy: unless-stopped
-    published_ports:
-      - "{{ bind_dns_zerotier_ip }}:53:53/tcp"
-      - "{{ bind_dns_zerotier_ip }}:53:53/udp"
-    volumes:
-      - "{{ bind_dns_dir }}:/etc/bind"
-    state: started
-  register: bind_dns_container
+- name: Check docker compose availability
+  ansible.builtin.command: docker compose version
+  register: compose_version
+  changed_when: false
+  failed_when: compose_version.rc != 0
 
-- name: Display compose status
+- name: Ensure compose directory exists
+  ansible.builtin.file:
+    path: "{{ bind_compose_path }}"
+    state: directory
+    mode: '0755'
+
+- name: Deploy docker-compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ bind_compose_path }}/docker-compose.yml"
+    mode: '0644'
+  notify: restart bind
+
+- name: Launch bind container
+  ansible.builtin.command: docker compose up -d
+  args:
+    chdir: "{{ bind_compose_path }}"
+  register: compose_up
+  changed_when: "'Recreating' in compose_up.stdout or 'Creating' in compose_up.stdout or 'Starting' in compose_up.stdout"
+
+- name: Display compose output
   ansible.builtin.debug:
-    var: bind_dns_container
+    var: compose_up.stdout
 
 - name: Wait for DNS to respond
   ansible.builtin.wait_for:

@@ -1,0 +1,11 @@
+version: '3'
+services:
+  bind:
+    container_name: bind_dns
+    image: "{{ bind_dns_image }}"
+    restart: unless-stopped
+    volumes:
+      - "{{ bind_dns_dir }}:/etc/bind"
+    ports:
+      - "{{ bind_dns_zerotier_ip }}:53:53/tcp"
+      - "{{ bind_dns_zerotier_ip }}:53:53/udp"

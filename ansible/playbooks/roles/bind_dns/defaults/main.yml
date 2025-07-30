@@ -9,3 +9,4 @@ bind_dns_forwarders:
 bind_dns_configure_resolver: false
 bind_dns_zones:
   - "{{ bind_dns_domain }}"
+bind_compose_path: "{{ bind_dns_dir }}"

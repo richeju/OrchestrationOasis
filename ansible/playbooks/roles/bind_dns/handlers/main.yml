@@ -1,7 +1,8 @@
 # ansible/playbooks/roles/bind_dns/handlers/main.yml
 ---
-- name: Restart BIND
-  community.docker.docker_container:
-    name: bind_dns
-    image: "{{ bind_dns_image }}"
-    restart: true
+- name: restart bind
+  ansible.builtin.command: docker compose up -d
+  args:
+    chdir: "{{ bind_compose_path }}"
+  register: compose_restart
+  changed_when: "'Recreating' in compose_restart.stdout or 'Creating' in compose_restart.stdout or 'Starting' in compose_restart.stdout"

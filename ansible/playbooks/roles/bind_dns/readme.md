@@ -1,6 +1,7 @@
 # bind_dns Role
 
 Deploys a BIND9 DNS server inside Docker and generates zone files from NetBox.
+The container is managed using `docker compose` with a generated compose file.
 
 ## Variables
 
@@ -13,6 +14,7 @@ Deploys a BIND9 DNS server inside Docker and generates zone files from NetBox.
 - `netbox_url`: Base URL for the NetBox API
 - `netbox_token`: API token for NetBox
 - `zerotier_ip`: IP address of the ZeroTier interface (auto-detected). Ports are bound to this address so BIND listens only on ZeroTier
+- `bind_compose_path`: Directory where `docker-compose.yml` is generated (defaults to `bind_dns_dir`)
 
 Example zone output (`zone.j2`):
 ```
