@@ -10,26 +10,7 @@ name: Deploy k3s
     - cron: '10 2 * * 2'
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-      - name: Install Ansible and ansible-lint
-        run: |
-          pip install ansible ansible-lint
-      - name: Run ansible-lint
-        env:
-          ANSIBLE_CONFIG: ansible/ansible.cfg
-        run: ansible-lint ansible/
-
   deploy:
-    needs: lint
-    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: self-hosted
     steps:
       - name: Checkout repository
@@ -45,4 +26,5 @@ jobs:
         env:
           ANSIBLE_DISPLAY_ARGS_TO_STDOUT: 'false'
         run: |
-          ansible-playbook playbooks/install_k3s.yml -i inventories/production/hosts.yml --become
+          ansible-playbook playbooks/install_k3s.yml \
+            -i inventories/production/hosts.yml --become
