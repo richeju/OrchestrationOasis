@@ -59,9 +59,7 @@ Use the helper script to run `yamllint` and `ansible-lint` locally:
 ./scripts/run-lint.sh
 ```
 
-The script automatically sets `ANSIBLE_CONFIG` to `ansible/ansible.cfg`. If you
-can't run the Docker-based Super-Linter locally, rely on the GitHub workflow to
-perform the additional checks.
+The script automatically sets `ANSIBLE_CONFIG` to `ansible/ansible.cfg`.
 
 ## Tasks Remaining for V1 (Debian 12, Bitwarden Web API)
 
@@ -91,7 +89,7 @@ perform the additional checks.
 
 4. [ ] **Configure Molecule**:
     - Create Molecule files for `docker` and `pcloud` (use `debian:12` image).
-    - Update `.github/workflows/lint.yml` with Molecule tests.
+    - Add Molecule tests to a CI workflow.
 
 5. [ ] **Create Documentation**:
     - Create `docs/` with `docker.md`, `pcloud.md`, `ufw.md`.
