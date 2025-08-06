@@ -1,0 +1,6 @@
+---
+portainer_dir: "/opt/portainer"
+portainer_image: "portainer/portainer-ce:latest"
+portainer_port: 9443
+portainer_edge_port: 8000
+portainer_data_volume: "portainer-data"
