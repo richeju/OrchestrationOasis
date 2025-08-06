@@ -1,0 +1,6 @@
+---
+- name: Install and configure Portainer
+  hosts: portainer
+  become: true
+  roles:
+    - portainer
