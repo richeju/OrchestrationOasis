@@ -1,0 +1,39 @@
+---
+name: Trivy Scan
+
+'on': [push, pull_request]
+
+jobs:
+  trivy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get date
+        id: date
+        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Cache Trivy database
+        uses: actions/cache@v4
+        with:
+          path: .cache/trivy
+          key: trivy-db-${{ steps.date.outputs.date }}
+          restore-keys: trivy-db-
+
+      - name: Install Trivy
+        uses: aquasecurity/setup-trivy@v0.2.2
+        with:
+          cache: false
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.32.0
+        with:
+          scan-type: fs
+          scan-ref: docker-compose.security.yml
+          scanners: vuln,config,secret
+          ignore-unfixed: true
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+          skip-setup-trivy: true
+          cache-dir: .cache/trivy
