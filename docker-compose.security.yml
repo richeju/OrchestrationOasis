@@ -1,0 +1,8 @@
+version: "3.9"
+services:
+  trivy:
+    image: aquasec/trivy:0.50.1
+    command: fs --exit-code 1 --severity HIGH,CRITICAL /project
+    volumes:
+      - ./:/project:ro
+      - ./.trivy-cache:/root/.cache/

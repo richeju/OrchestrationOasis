@@ -1,2 +1,5 @@
 # Generated locally – never commit
 docker-compose.override.yml
+
+# Trivy cache
+.trivy-cache/
