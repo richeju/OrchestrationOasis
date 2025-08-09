@@ -1,7 +1,10 @@
 ---
 - name: Detect ZeroTier interface
   ansible.builtin.set_fact:
-    dashboard_zerotier_interface: "{{ ansible_interfaces | select('match', '^zt') | list | first | default('') }}"
+    dashboard_zerotier_interface: >-
+      {{ ansible_interfaces
+         | select('match', '^zt')
+         | list | first | default('') }}
 
 - name: Fail if ZeroTier interface not found
   ansible.builtin.fail:
@@ -10,7 +13,9 @@
 
 - name: Gather ZeroTier IP address
   ansible.builtin.set_fact:
-    dashboard_zerotier_ip: "{{ hostvars[inventory_hostname]['ansible_' ~ dashboard_zerotier_interface]['ipv4']['address'] }}"
+    dashboard_zerotier_ip: >-
+      {{ hostvars[inventory_hostname]['ansible_' ~ dashboard_zerotier_interface]
+         ['ipv4']['address'] }}
 
 - name: Ensure Dashboard directory exists
   ansible.builtin.file:

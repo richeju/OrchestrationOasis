@@ -8,7 +8,10 @@ compose:
   ansible_host: >-
     {{ primary_ip.address if primary_ip is not none else '' }}
   environment_service: >-
-    {{ custom_fields.environment ~ '_' ~ custom_fields.service if (custom_fields.environment is defined and custom_fields.service is defined) else None }}
+    {{ custom_fields.environment ~ '_' ~ custom_fields.service
+       if (custom_fields.environment is defined and
+           custom_fields.service is defined)
+       else None }}
 keyed_groups:
   - key: environment_service
     prefix: ''
