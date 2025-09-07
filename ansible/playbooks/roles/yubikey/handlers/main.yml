@@ -1,0 +1,7 @@
+# ansible/playbooks/roles/yubikey/handlers/main.yml
+---
+- name: Reload sshd
+  ansible.builtin.systemd:
+    name: ssh
+    state: reloaded
+  become: true

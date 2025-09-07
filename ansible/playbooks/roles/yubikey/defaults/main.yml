@@ -1,0 +1,3 @@
+---
+yubikey_authfile: /etc/yubico/u2f_keys
+yubikey_mappings: []

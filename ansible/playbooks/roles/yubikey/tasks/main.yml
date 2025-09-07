@@ -1,0 +1,63 @@
+# ansible/playbooks/roles/yubikey/tasks/main.yml
+---
+- name: Install YubiKey dependencies
+  ansible.builtin.apt:
+    name:
+      - libpam-u2f
+      - pcscd
+    state: present
+    update_cache: true
+  become: true
+
+- name: Ensure directory for U2F mappings exists
+  ansible.builtin.file:
+    path: "{{ yubikey_authfile | dirname }}"
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: Ensure U2F mappings file exists
+  ansible.builtin.file:
+    path: "{{ yubikey_authfile }}"
+    state: touch
+    mode: '0600'
+    owner: root
+    group: root
+  become: true
+
+- name: Deploy U2F mappings if provided
+  ansible.builtin.copy:
+    dest: "{{ yubikey_authfile }}"
+    content: "{{ (yubikey_mappings | join('\n')) ~ '\n' }}"
+    mode: '0600'
+    owner: root
+    group: root
+  when: yubikey_mappings | length > 0
+  become: true
+
+- name: Configure PAM for U2F
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/sshd
+    regexp: '^auth\s+required\s+pam_u2f\.so'
+    line: "auth required pam_u2f.so authfile={{ yubikey_authfile }}"
+    insertafter: '^@include common-auth'
+  notify: Reload sshd
+  become: true
+
+- name: Enable ChallengeResponseAuthentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^ChallengeResponseAuthentication'
+    line: 'ChallengeResponseAuthentication yes'
+    state: present
+  notify: Reload sshd
+  become: true
+
+- name: Require both public key and U2F for SSH
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^AuthenticationMethods'
+    line: 'AuthenticationMethods publickey,keyboard-interactive'
+    state: present
+  notify: Reload sshd
+  become: true
