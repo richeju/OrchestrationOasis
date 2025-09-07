@@ -1,6 +1,6 @@
 name: Security Scan
 
-on:
+"on":
   push:
   pull_request:
 

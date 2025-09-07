@@ -51,6 +51,42 @@ Set `zerotier_network_id` to join a specific network (leave empty to skip).
 To remove unnecessary packages while keeping Chocolatey, run `choco uninstall <package>` for each application you want to remove.
 
 
+### YubiKey for SSH
+
+To require a YubiKey alongside your SSH key:
+
+1. Generate a U2F mapping on a system with the YubiKey attached:
+
+   ```bash
+   pamu2fcfg >> ~/.config/Yubico/u2f_keys
+   ```
+
+   Copy the resulting line into your inventory. For example:
+
+   ```yaml
+   yubikey_mappings:
+     - "alice:HEXDATA"
+   ```
+
+   Alternatively, place the line in a file and set `yubikey_authfile` to its path.
+
+2. Ensure your inventory has a `yubikey` group for the host you want to protect:
+
+   ```yaml
+   yubikey:
+     hosts:
+       localhost:
+   ```
+
+3. Deploy the configuration:
+
+   ```bash
+   ansible-playbook -i <inventory> playbooks/install_yubikey.yml
+   ```
+
+After the playbook runs, SSH logins will prompt for a touch of the YubiKey after public key authentication.
+
+
 ## Linting
 
 Use the helper script to run `yamllint` and `ansible-lint` locally:
