@@ -1,0 +1,6 @@
+---
+- name: Install and configure YubiKey for SSH
+  hosts: yubikey
+  become: true
+  roles:
+    - yubikey
