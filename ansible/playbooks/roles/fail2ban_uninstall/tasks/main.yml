@@ -1,0 +1,28 @@
+---
+- name: Stop and disable fail2ban service
+  ansible.builtin.systemd:
+    name: fail2ban
+    state: stopped
+    enabled: false
+  failed_when: false
+  become: true
+
+- name: Purge fail2ban package
+  ansible.builtin.apt:
+    name: fail2ban
+    state: absent
+    purge: true
+    update_cache: true
+  become: true
+
+- name: Remove fail2ban configuration directory
+  ansible.builtin.file:
+    path: /etc/fail2ban
+    state: absent
+  become: true
+
+- name: Remove fail2ban cache directory
+  ansible.builtin.file:
+    path: /var/lib/fail2ban
+    state: absent
+  become: true
