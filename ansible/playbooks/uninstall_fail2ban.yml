@@ -1,0 +1,6 @@
+---
+- name: Uninstall Fail2ban
+  hosts: fail2ban
+  become: true
+  roles:
+    - fail2ban_uninstall
