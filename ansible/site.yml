@@ -10,7 +10,6 @@
 
 # - import_playbook: playbooks/install_docker.yml
 # - import_playbook: playbooks/install_ufw.yml
-# - import_playbook: playbooks/install_fail2ban.yml
 # - import_playbook: playbooks/install_pcloud.yml
 # - import_playbook: playbooks/install_zerotier.yml
 # - import_playbook: playbooks/install_bind_dns.yml
