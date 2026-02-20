@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install Docker and Fail2ban on Debian-based systems
+# Install Docker on Debian-based systems
 set -euo pipefail
 
 REPO_URL="${1:-}"
@@ -65,45 +65,10 @@ install_docker() {
     log "Docker installation complete"
 }
 
-install_fail2ban() {
-    if ! dpkg -s fail2ban >/dev/null 2>&1; then
-        log "Installing Fail2ban"
-        run apt-get install -y fail2ban
-    else
-        log "Fail2ban already installed"
-    fi
-}
-
-configure_fail2ban() {
-    log "Configuring Fail2ban"
-    run tee /etc/fail2ban/fail2ban.conf >/dev/null <<'CONF'
-[DEFAULT]
-loglevel = INFO
-logtarget = SYSLOG
-backend = systemd
-CONF
-
-    run tee /etc/fail2ban/jail.local >/dev/null <<'CONF'
-[DEFAULT]
-backend = systemd
-bantime = 3600
-maxretry = 5
-
-[sshd]
-enabled = true
-filter = sshd
-CONF
-
-    run systemctl enable --now fail2ban
-    log "Fail2ban installation complete"
-}
-
 main() {
     install_base_packages
     clone_repository_if_requested
     install_docker
-    install_fail2ban
-    configure_fail2ban
 }
 
 main
