@@ -18,4 +18,4 @@ docker compose -f docker-compose.security.yml run --rm trivy
 
 ## Intégration CI
 
-Le workflow GitHub [`security.yml`](.github/workflows/security.yml) exécute automatiquement un scan Trivy sur chaque `push` et `pull request`. Le job échouera si des vulnérabilités de sévérité `HIGH` ou `CRITICAL` sont trouvées.
+Le job `security` du workflow GitHub [`ci.yml`](.github/workflows/ci.yml) exécute automatiquement un scan Trivy sur chaque `push` et `pull request`. Le job échouera si des vulnérabilités de sévérité `HIGH` ou `CRITICAL` sont trouvées.

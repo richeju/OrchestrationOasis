@@ -4,9 +4,9 @@ set -euo pipefail
 
 missing_tools=0
 
-# Run yamllint using relaxed rules
+# Run yamllint using the repository configuration
 if command -v yamllint >/dev/null 2>&1; then
-    yamllint -d "{extends: relaxed}" .
+    yamllint --strict .
 else
     echo "yamllint is not installed" >&2
     missing_tools=1

@@ -1,0 +1,34 @@
+---
+# Copy this file to hosts.yml and adapt it to your infrastructure.
+# hosts.yml is ignored by Git and must never contain plaintext secrets.
+all:
+  children:
+    linux:
+      hosts:
+        oasis:
+          ansible_host: 192.0.2.10
+          ansible_user: admin
+    docker:
+      hosts:
+        oasis:
+    ufw:
+      hosts:
+        oasis:
+    dashboard:
+      hosts:
+        oasis:
+    pcloud:
+      hosts:
+        oasis:
+    portainer:
+      hosts:
+        oasis:
+    netbox:
+      hosts:
+        oasis:
+    k3s:
+      hosts:
+        oasis:
+    yubikey:
+      hosts:
+        oasis:

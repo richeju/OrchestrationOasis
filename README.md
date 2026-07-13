@@ -1,146 +1,87 @@
 # Orchestration Oasis
 
-Orchestration Oasis is an infrastructure automation project built around **Ansible**. It currently features roles for Docker, UFW, pCloud, Zerotier, Duplicati, and NetBox, and a Dashy-based Dashboard (using Docker Compose) to help configure a Debian 12 server.
-Windows hosts can also be provisioned using Chocolatey. A dedicated role installs Chocolatey, and another role installs the optional Chocolatey GUI.
-The list below tracks the remaining work before the first stable release.
+Orchestration Oasis provisions a small self-hosted infrastructure with
+[Ansible](https://docs.ansible.com/). It targets Debian hosts and keeps Windows
+Chocolatey automation as a separate entry point.
 
-## Setup
+The project favours explicit inventory groups, idempotent roles, manual
+production deployments, and secrets supplied at runtime. No production host or
+credential belongs in Git.
 
-Run the helper script to install Docker on a fresh Debian system.
-The script is non-interactive, installs Git and optionally clones a
-repository if a URL is provided. Docker is configured with a basic setup and the script skips packages that are already installed:
+## Managed services
+
+The complete Linux playbook can manage system updates, Docker, UFW, ZeroTier,
+pCloud through rclone, Dashy, Duplicati, Prometheus, Portainer, NetBox, BIND,
+k3s, and YubiKey SSH authentication. A host receives only the roles represented
+by its inventory groups.
+
+## Quick start
+
+Requirements: Python 3.12 or newer, GNU Make, and a Debian target reachable through SSH.
 
 ```bash
-./scripts/setup-debian.sh <repo_url>
+python3 -m venv .venv
+source .venv/bin/activate
+make install
+cp ansible/inventories/production/hosts.example.yml \
+  ansible/inventories/production/hosts.yml
 ```
 
-
-## Usage
-
-Run the Ansible playbook (replace `<inventory>` with your inventory file):
+Edit the copied inventory, then preview a deployment:
 
 ```bash
 cd ansible
-ansible-playbook -i <inventory> site.yml
+ansible-playbook site.yml \
+  --inventory inventories/production/hosts.yml \
+  --check --diff
 ```
 
-
-For Windows hosts, first install Chocolatey:
+Deploy one service by tag:
 
 ```bash
-ansible-playbook -i <inventory> playbooks/install_chocolatey.yml
+ansible-playbook site.yml \
+  --inventory inventories/production/hosts.yml \
+  --tags docker
 ```
 
-Optionally install the Chocolatey GUI:
+Run all local quality checks from the repository root:
 
 ```bash
-ansible-playbook -i <inventory> playbooks/install_chocolatey_gui.yml
+make check
 ```
 
-The Chocolatey role now also upgrades all installed packages to their latest
-versions on each run.
+## Secrets
 
-To install Zerotier only on hosts in the `zerotier` group:
+Provide secrets with Ansible Vault or environment variables. The currently
+supported deployment variables are:
 
-```bash
-ansible-playbook -i <inventory> playbooks/install_zerotier.yml
+- `PCLOUD_TOKEN`
+- `NETBOX_DB_PASSWORD`
+- `NETBOX_REDIS_PASSWORD`
+- `NETBOX_SECRET_KEY`
+- `DUPLICATI_WEB_PASSWORD`
+- `DUPLICATI_SETTINGS_KEY` (optional)
+
+The pCloud, NetBox, and Duplicati roles fail before making changes when their required
+secrets are missing or clearly unsafe. See [deployment](docs/deployment.md) for
+GitHub environment setup.
+
+## Repository layout
+
+```text
+ansible/
+  inventories/example/       safe syntax-check inventory
+  inventories/production/    ignored local production inventory
+  playbooks/                  focused entry points
+  playbooks/roles/            reusable service roles
+  site.yml                    complete tagged orchestration
+docs/                         architecture and operations
+.github/workflows/            CI, manual deploy, maintenance
 ```
 
-Set `zerotier_network_id` to join a specific network (leave empty to skip).
+Further reading:
 
-To remove unnecessary packages while keeping Chocolatey, run `choco uninstall <package>` for each application you want to remove.
-
-
-### YubiKey for SSH
-
-To require a YubiKey alongside your SSH key:
-
-1. Generate a U2F mapping on a system with the YubiKey attached:
-
-   ```bash
-   pamu2fcfg >> ~/.config/Yubico/u2f_keys
-   ```
-
-   Copy the resulting line into your inventory. For example:
-
-   ```yaml
-   yubikey_mappings:
-     - "alice:HEXDATA"
-   ```
-
-   Alternatively, place the line in a file and set `yubikey_authfile` to its path.
-
-2. Ensure your inventory has a `yubikey` group for the host you want to protect:
-
-   ```yaml
-   yubikey:
-     hosts:
-       localhost:
-   ```
-
-3. Deploy the configuration:
-
-   ```bash
-   ansible-playbook -i <inventory> playbooks/install_yubikey.yml
-   ```
-
-After the playbook runs, SSH logins will prompt for a touch of the YubiKey after public key authentication.
-
-
-## Linting
-
-Use the helper script to run `yamllint` and `ansible-lint` locally:
-
-```bash
-./scripts/run-lint.sh
-```
-
-The script automatically sets `ANSIBLE_CONFIG` to `ansible/ansible.cfg`. If you
-can't run the Docker-based Super-Linter locally, rely on the GitHub workflow to
-perform the additional checks.
-
-## Tasks Remaining for V1 (Debian 12, Bitwarden Web API)
-
-1. [x] **Verify Linting**:
-    - Re-run Super-Linter to confirm:
-     ```bash
-     docker run --rm -v $(pwd):/github/workspace -e VALIDATE_ALL_CODEBASE=true -e VALIDATE_MARKDOWN=true -e VALIDATE_YAML=true -e VALIDATE_ANSIBLE=true -e DEFAULT_BRANCH=main github/super-linter:v5
-     ```
-    - If yamllint warns about `pcloud/templates/rclone.conf.j2` or `rclone-pcloud.service.j2`,
-      ignore the message or add `# yamllint disable-file` to the top of the template.
-      These files are not YAML, so adding `---` will break rclone and systemd.
-
-2. [x] **Integrate Bitwarden Web API**:
-    - Delete `ansible/playbooks/roles/pcloud/vars/vault.yml`:
-     ```bash
-     git rm ansible/playbooks/roles/pcloud/vars/vault.yml
-     ```
-    - Update `install_pcloud.yml` (remove `vars_files`).
-    - Update `site.yml` (remove `vars_files`).
-    - Modify `pcloud/tasks/main.yml` to use Bitwarden API (authentication, token retrieval).
-    - Update `.ansible-lint` (remove `exclude_paths`).
-
-3. [ ] **Add Validations to Roles**:
-    - `docker`: Verify service and `docker ps`.
-    - `pcloud`: Verify `/mnt/pcloud` mount.
-    - `ufw`: Verify `ufw status`.
-
-4. [ ] **Configure Molecule**:
-    - Create Molecule files for `docker` and `pcloud` (use `debian:12` image).
-    - Update `.github/workflows/lint.yml` with Molecule tests.
-
-5. [ ] **Create Documentation**:
-    - Create `docs/` with `docker.md`, `pcloud.md`, `ufw.md`.
-    - Copy `ansible/playbooks/roles/pcloud/readme.md` to `docs/pcloud.md`.
-
-6. [ ] **Add Inventory**:
-    - Create `examples/inventory.yml` with Bitwarden variables (`client_id`, `client_secret`, `password`, `token_item_id`).
-
-7. [ ] **Test on Debian 12**:
-    - Run playbooks, verify services (Docker, pCloud, UFW).
-    - Test Molecule locally:
-     ```bash
-     pip install molecule[docker] docker
-     cd ansible/playbooks/roles/docker
-     molecule test
-     ```
+- [Architecture](docs/architecture.md)
+- [Deployment and GitHub Actions](docs/deployment.md)
+- [pCloud operations](docs/pcloud.md)
+- [Security notes](README.security.md)

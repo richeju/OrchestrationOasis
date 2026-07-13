@@ -1,15 +1,54 @@
 ---
-# Master playbook
-#
-# This file orchestrates the infrastructure by importing the individual
-# playbooks. To deploy incrementally, only the dashboard is executed by
-# default. Uncomment additional imports as you are ready to roll out more
-# services.
+# Complete Linux orchestration entry point. Every imported playbook targets its
+# own inventory group, so a host only receives the services assigned to it.
+- name: Apply operating-system updates
+  ansible.builtin.import_playbook: playbooks/apply_updates.yml
+  tags: [apt]
 
-- import_playbook: playbooks/install_dashboard.yml  # noqa name[play]
+- name: Install Docker
+  ansible.builtin.import_playbook: playbooks/install_docker.yml
+  tags: [docker]
 
-# - import_playbook: playbooks/install_docker.yml
-# - import_playbook: playbooks/install_ufw.yml
-# - import_playbook: playbooks/install_pcloud.yml
-# - import_playbook: playbooks/install_zerotier.yml
-# - import_playbook: playbooks/install_bind_dns.yml
+- name: Configure the firewall
+  ansible.builtin.import_playbook: playbooks/install_ufw.yml
+  tags: [ufw]
+
+- name: Configure ZeroTier
+  ansible.builtin.import_playbook: playbooks/install_zerotier.yml
+  tags: [zerotier]
+
+- name: Mount pCloud
+  ansible.builtin.import_playbook: playbooks/install_pcloud.yml
+  tags: [pcloud]
+
+- name: Deploy the dashboard
+  ansible.builtin.import_playbook: playbooks/install_dashboard.yml
+  tags: [dashboard]
+
+- name: Deploy Duplicati
+  ansible.builtin.import_playbook: playbooks/install_duplicati.yml
+  tags: [duplicati]
+
+- name: Deploy Prometheus
+  ansible.builtin.import_playbook: playbooks/install_prometheus.yml
+  tags: [prometheus]
+
+- name: Deploy Portainer
+  ansible.builtin.import_playbook: playbooks/install_portainer.yml
+  tags: [portainer]
+
+- name: Deploy NetBox
+  ansible.builtin.import_playbook: playbooks/install_netbox.yml
+  tags: [netbox]
+
+- name: Deploy BIND DNS
+  ansible.builtin.import_playbook: playbooks/install_bind_dns.yml
+  tags: [bind_dns]
+
+- name: Deploy k3s
+  ansible.builtin.import_playbook: playbooks/install_k3s.yml
+  tags: [k3s]
+
+- name: Configure YubiKey authentication
+  ansible.builtin.import_playbook: playbooks/install_yubikey.yml
+  tags: [yubikey]

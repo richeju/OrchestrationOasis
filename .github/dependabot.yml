@@ -1,0 +1,21 @@
+---
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      github-actions-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      python-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
