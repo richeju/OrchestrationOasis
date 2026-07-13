@@ -1,19 +1,19 @@
 # yamllint disable-file
-# Note: {{ pcloud_mount_point }} must be empty before starting (managed by Ansible)
 [Unit]
 Description=rclone mount for pCloud
 After=network-online.target
 Wants=network-online.target
+AssertPathIsDirectory={{ pcloud_mount_point }}
 
 [Service]
 Type=notify
 ExecStart=/usr/bin/rclone mount pcloud: {{ pcloud_mount_point }} {{ pcloud_rclone_options | join(' ') }} --config {{ pcloud_config_file }}
-ExecStop=/bin/fusermount -u {{ pcloud_mount_point }}
-ExecStopPost=/usr/bin/umount -l {{ pcloud_mount_point }}
-KillMode=process
+ExecStop=-/usr/bin/fusermount3 -u -z {{ pcloud_mount_point }}
+KillMode=mixed
 Restart=on-failure
+RestartSec=5s
 User=root
-Group=root
+Group={{ pcloud_group }}
 TimeoutStopSec=30
 
 [Install]

@@ -1,6 +1,6 @@
 ---
 - name: Clean up Docker resources
-  hosts: all
+  hosts: docker
   become: true
   tasks:
     - name: Remove stopped containers

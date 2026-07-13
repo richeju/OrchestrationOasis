@@ -1,90 +1,102 @@
-# yamllint disable-file
+---
+- name: Validate pCloud configuration
+  ansible.builtin.assert:
+    that:
+      - pcloud_token | length > 0
+      - pcloud_mount_point is ansible.builtin.match('^/.+')
+    fail_msg: >-
+      A pCloud token and an absolute mount point are required. Provide the
+      token through Ansible Vault or the PCLOUD_TOKEN environment variable.
+  no_log: true
 
-- name: "Kill existing rclone processes (if any)"
-  ansible.builtin.command: "pkill -9 rclone"
-  changed_when: false
-  failed_when: false
+- name: Install rclone and FUSE
+  ansible.builtin.apt:
+    name:
+      - fuse3
+      - rclone
+    state: present
+    update_cache: true
 
-- name: "Attempt fusermount unmount"
-  ansible.builtin.command: "fusermount -u /mnt/pcloud"
-  changed_when: false
-  failed_when: false
+- name: Create the pCloud access group
+  ansible.builtin.group:
+    name: "{{ pcloud_group }}"
+    gid: "{{ pcloud_gid }}"
+    state: present
 
-- name: "Attempt lazy unmount"
-  ansible.builtin.command: "umount -l /mnt/pcloud"
-  changed_when: false
-  failed_when: false
-
-- name: "Attempt force unmount"
-  ansible.builtin.command: "umount -f /mnt/pcloud"
-  changed_when: false
-  failed_when: false
-
-
-- name: "Recreate mountpoint"
-  ansible.builtin.file:
-    path: /mnt/pcloud
-    state: directory
-    owner: root
-    group: pcloud_users
-    mode: "0770"
-
-- name: "Create directory for rclone config"
-  ansible.builtin.file:
-    path: /etc/rclone
-    state: directory
+- name: Permit FUSE mounts with allow-other
+  ansible.builtin.lineinfile:
+    path: /etc/fuse.conf
+    regexp: '^#?user_allow_other$'
+    line: user_allow_other
+    create: true
     owner: root
     group: root
-    mode: "0755"
+    mode: "0644"
 
-- name: "Configure rclone credentials file"
-  ansible.builtin.template:
-    src: rclone.conf.j2
-    dest: /etc/rclone/rclone.conf
-    owner: root
-    group: root
-    mode: "0600"
-
-- name: "Create log file for rclone"
+- name: Create pCloud directories
   ansible.builtin.file:
-    path: /var/log/rclone.log
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ pcloud_mount_point }}"
+      group: "{{ pcloud_group }}"
+      mode: "0770"
+    - path: "{{ pcloud_config_file | dirname }}"
+      group: root
+      mode: "0755"
+    - path: /var/cache/rclone
+      group: root
+      mode: "0755"
+
+- name: Create the rclone log file
+  ansible.builtin.file:
+    path: "{{ pcloud_log_file }}"
     state: touch
     owner: root
     group: root
-    mode: "0644"
+    mode: "0640"
+    access_time: preserve
+    modification_time: preserve
 
-- name: "Create rclone cache directory"
-  ansible.builtin.file:
-    path: /var/cache/rclone
-    state: directory
+- name: Configure pCloud credentials
+  ansible.builtin.template:
+    src: rclone.conf.j2
+    dest: "{{ pcloud_config_file }}"
     owner: root
     group: root
-    mode: "0755"
+    mode: "0600"
+  no_log: true
+  notify: Restart pCloud mount
 
-- name: "Generate rclone-pcloud systemd service"
+- name: Install the pCloud systemd unit
   ansible.builtin.template:
     src: rclone-pcloud.service.j2
-    dest: /etc/systemd/system/rclone-pcloud.service
+    dest: "{{ pcloud_service_file }}"
     owner: root
     group: root
     mode: "0644"
+  notify: Restart pCloud mount
 
-- name: "Reload systemd daemon"
-  ansible.builtin.systemd:
-    daemon_reload: true
+- name: Apply pending pCloud service changes
+  ansible.builtin.meta: flush_handlers
 
-- name: "Ensure pCloud mountpoint is healthy before starting"
-  ansible.builtin.stat:
-    path: /mnt/pcloud
-  register: pcloud_mountpoint
-
-- name: "Fail if pcloud is not mounted or inaccessible"
-  ansible.builtin.fail:
-    msg: "/mnt/pcloud is not properly mounted. Aborting before damaging remote storage."
-  when: not pcloud_mountpoint.stat.exists or pcloud_mountpoint.stat.isdir is not defined
-
-- name: "Enable and start rclone-pcloud service"
-  ansible.builtin.systemd:
+- name: Ensure the pCloud mount is enabled and started
+  ansible.builtin.systemd_service:
     name: rclone-pcloud.service
-    state: restarted
     enabled: true
+    state: started
+
+- name: Verify the pCloud mount
+  ansible.builtin.command:
+    argv:
+      - mountpoint
+      - --quiet
+      - "{{ pcloud_mount_point }}"
+  register: pcloud_mount_check
+  changed_when: false
+  retries: 5
+  delay: 2
+  until: pcloud_mount_check.rc == 0

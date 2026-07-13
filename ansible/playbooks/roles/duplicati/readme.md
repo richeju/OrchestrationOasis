@@ -9,8 +9,8 @@ Deploys [Duplicati](https://www.duplicati.com/) using Docker Compose.
 - `duplicati_puid`: User ID for the container (default `1000`)
 - `duplicati_pgid`: Group ID for the container (default `1000`)
 - `duplicati_timezone`: Time zone (default `Etc/UTC`)
-- `duplicati_settings_key`: Optional settings encryption key (default empty)
+- `duplicati_settings_key`: Optional settings encryption key from `DUPLICATI_SETTINGS_KEY`
 - `duplicati_port`: Host port for the web UI (default `8200`)
-- `duplicati_web_password`: Password for the web UI (default `""`)
+- `duplicati_web_password`: Required web UI password from `DUPLICATI_WEB_PASSWORD`
 
-Store sensitive values outside version control if required.
+Store sensitive values in the environment or Ansible Vault, never in version control.

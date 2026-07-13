@@ -3,3 +3,12 @@ docker-compose.override.yml
 
 # Trivy cache
 .trivy-cache/
+
+# Local production state and tool caches
+ansible/inventories/production/*.yml
+!ansible/inventories/production/*.example.yml
+ansible/inventories/runtime/
+.cache/
+.venv/
+*.retry
+.vault_pass

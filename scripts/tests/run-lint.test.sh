@@ -58,7 +58,7 @@ SH
 
     rm -rf "$temp_path"
 
-    assert_contains "$output" "yamllint:-d {extends: relaxed} ."
+    assert_contains "$output" "yamllint:--strict ."
     assert_contains "$output" "ansible-lint:--offline|ANSIBLE_CONFIG=ansible/ansible.cfg"
 }
 

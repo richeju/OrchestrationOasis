@@ -1,6 +1,6 @@
 ---
 - name: Update and upgrade system packages
-  hosts: all
+  hosts: linux
   become: true
   roles:
     - apt

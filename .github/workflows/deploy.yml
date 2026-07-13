@@ -3,25 +3,89 @@ name: Deploy
 
 'on':
   workflow_dispatch:
+    inputs:
+      target:
+        description: Service or complete stack to deploy
+        required: true
+        default: full
+        type: choice
+        options:
+          - full
+          - apt
+          - docker
+          - ufw
+          - zerotier
+          - pcloud
+          - dashboard
+          - duplicati
+          - prometheus
+          - portainer
+          - netbox
+          - bind_dns
+          - k3s
+          - yubikey
+      check:
+        description: Run in check mode without applying changes
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: self-hosted
+    environment: production
+    timeout-minutes: 45
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
 
       - name: Install Ansible
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ansible
+        run: python -m pip install --requirement requirements-dev.txt
 
       - name: Install Ansible collections
-        run: ansible-galaxy collection install -r ansible/requirements.yml
+        run: ansible-galaxy collection install --requirements-file ansible/requirements.yml
 
-      - name: Execute playbook
+      - name: Create private inventory
+        env:
+          ANSIBLE_INVENTORY: ${{ secrets.ANSIBLE_INVENTORY }}
+        run: |
+          test -n "$ANSIBLE_INVENTORY"
+          install -d -m 0700 ansible/inventories/runtime
+          printf '%s\n' "$ANSIBLE_INVENTORY" > ansible/inventories/runtime/hosts.yml
+          chmod 0600 ansible/inventories/runtime/hosts.yml
+
+      - name: Execute deployment
         working-directory: ansible
         env:
+          ANSIBLE_DISPLAY_ARGS_TO_STDOUT: 'false'
           PCLOUD_TOKEN: ${{ secrets.PCLOUD_TOKEN }}
+          NETBOX_DB_PASSWORD: ${{ secrets.NETBOX_DB_PASSWORD }}
+          NETBOX_REDIS_PASSWORD: ${{ secrets.NETBOX_REDIS_PASSWORD }}
+          NETBOX_SECRET_KEY: ${{ secrets.NETBOX_SECRET_KEY }}
+          DUPLICATI_WEB_PASSWORD: ${{ secrets.DUPLICATI_WEB_PASSWORD }}
+          DUPLICATI_SETTINGS_KEY: ${{ secrets.DUPLICATI_SETTINGS_KEY }}
+          TARGET: ${{ inputs.target }}
+          CHECK_MODE: ${{ inputs.check }}
         run: |
-          ansible-playbook -i inventories/production/hosts.yml site.yml --become
+          args=(site.yml --inventory inventories/runtime/hosts.yml --tags "$TARGET")
+          if [[ "$TARGET" == "full" ]]; then
+            args=(site.yml --inventory inventories/runtime/hosts.yml)
+          fi
+          if [[ "$CHECK_MODE" == "true" ]]; then
+            args+=(--check --diff)
+          fi
+          ansible-playbook "${args[@]}"

@@ -1,4 +1,14 @@
 ---
+- name: Validate Duplicati secrets
+  ansible.builtin.assert:
+    that:
+      - duplicati_web_password | length >= 16
+      - duplicati_settings_key | length == 0 or duplicati_settings_key | length >= 16
+    fail_msg: >-
+      Set a strong DUPLICATI_WEB_PASSWORD and, when used, a strong
+      DUPLICATI_SETTINGS_KEY through the environment or Ansible Vault.
+  no_log: true
+
 - name: Ensure Duplicati directory exists
   ansible.builtin.file:
     path: "{{ duplicati_dir }}"
@@ -9,7 +19,8 @@
   ansible.builtin.template:
     src: docker-compose.yml.j2
     dest: "{{ duplicati_dir }}/docker-compose.yml"
-    mode: '0644'
+    mode: '0600'
+  no_log: true
 
 - name: Launch Duplicati stack
   community.docker.docker_compose_v2:
