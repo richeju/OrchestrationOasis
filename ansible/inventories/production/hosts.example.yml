@@ -1,6 +1,8 @@
 ---
 # Copy this file to hosts.yml and adapt it to your infrastructure.
 # hosts.yml is ignored by Git and must never contain plaintext secrets.
+# Only linux and docker are enabled by default. Add the host to an optional
+# group only after reading docs/deployment.md and the role documentation.
 all:
   children:
     linux:
@@ -12,23 +14,26 @@ all:
       hosts:
         oasis:
     ufw:
-      hosts:
-        oasis:
-    dashboard:
-      hosts:
-        oasis:
+      hosts: {}
+    zerotier:
+      hosts: {}
     pcloud:
-      hosts:
-        oasis:
+      hosts: {}
+    dashboard:
+      hosts: {}
+    duplicati:
+      hosts: {}
+    prometheus:
+      hosts: {}
     portainer:
-      hosts:
-        oasis:
+      hosts: {}
     netbox:
-      hosts:
-        oasis:
+      hosts: {}
+    openbao:
+      hosts: {}
+    bind_dns:
+      hosts: {}
     k3s:
-      hosts:
-        oasis:
+      hosts: {}
     yubikey:
-      hosts:
-        oasis:
+      hosts: {}

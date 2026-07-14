@@ -1,12 +1,12 @@
 plugin: netbox.netbox.nb_inventory
 api_endpoint: "{{ lookup('env', 'NETBOX_API_ENDPOINT') }}"
 token: "{{ lookup('env', 'NETBOX_API_TOKEN') }}"
-validate_certs: false
+validate_certs: true
 groupby_custom_field:
   - service
 compose:
   ansible_host: >-
-    {{ primary_ip.address if primary_ip is not none else '' }}
+    {{ primary_ip.address.split('/') | first if primary_ip is not none else '' }}
   environment_service: >-
     {{ custom_fields.environment ~ '_' ~ custom_fields.service
        if (custom_fields.environment is defined and

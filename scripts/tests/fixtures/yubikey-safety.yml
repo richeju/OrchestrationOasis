@@ -1,0 +1,6 @@
+---
+- name: Verify YubiKey safety gate
+  hosts: all
+  gather_facts: false
+  roles:
+    - role: yubikey

@@ -5,7 +5,7 @@ storage, mandatory TLS, a file audit device, and audit-log rotation.
 
 The role deliberately does not initialize, unseal, or inject root tokens. Those
 operations produce sensitive recovery material and remain explicit operator
-steps documented in `docs/openbao.md`.
+steps documented in [the OpenBao operations guide](../../../../docs/openbao.md).
 
 ## Safety defaults
 

@@ -1,19 +1,19 @@
-# How to Generate a Token for pCloud
+# How to generate a pCloud token
 
-This guide explains how to generate an authentication token for pCloud using rclone, which is required for the `pcloud` role in this repository.
+The `pcloud` role uses an rclone OAuth token. Generate it on a trusted machine
+with a web browser; never paste the resulting token into Git or a plaintext
+inventory.
 
-## Steps
+1. Install a current rclone release and run `rclone config`.
+2. Choose `n` to create a new remote and give it a local name such as `pcloud`.
+3. Select the backend named `pcloud`. Do not rely on its numeric menu position,
+   which can change between rclone versions.
+4. Leave `client_id` and `client_secret` empty unless you operate your own pCloud
+   OAuth application.
+5. Use browser authentication, sign in to pCloud, and authorize rclone.
+6. Copy the complete JSON token returned by rclone.
+7. Supply it as `PCLOUD_TOKEN` or an encrypted `pcloud_token` Ansible Vault
+   value. The environment variable takes precedence.
 
-- Install rclone on a machine with a web browser, then type `rclone config` in a command-line interface (CLI).
-- Select `n` for "New remote".
-- Enter a name for the new remote (e.g., `pcloud`).
-- When prompted for "Storage", type `40` (the number for pCloud).
-- Press Enter to leave `client_id` and `client_secret` empty.
-- When asked about "Advanced Settings", press Enter for "No".
-- When prompted "Use web browser to automatically authenticate rclone with remote?", answer:
-  - `y` if the machine running rclone has a web browser you can use.
-- Log in to pCloud via the browser link provided by rclone and authorize access.
-- Once completed, rclone will display a token in JSON format (e.g., `{"access_token":"xxx","token_type":"bearer","expiry":"2025-05-05T22:00:00Z"}`).
-- Save this token, including the curly braces, and provide it through the `PCLOUD_TOKEN` environment variable or an encrypted `pcloud_token` Ansible Vault value. Never store it in role defaults or a plaintext inventory.
--
-- The role also supports the `PCLOUD_TOKEN` environment variable. When set, this variable overrides other token sources, making it convenient to pass the token through GitHub Secrets.
+Treat the token as a password. Revoke it in pCloud and replace the deployment
+secret if it is ever exposed.

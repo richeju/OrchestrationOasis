@@ -11,8 +11,9 @@ The container is managed using `docker compose` with a generated compose file.
 - `bind_dns_image`: Docker image tag (default `internetsystemsconsortium/bind9:9.18`)
 - `bind_dns_forwarders`: List of DNS forwarder IPs (default `1.1.1.1`, `9.9.9.9`)
 - `bind_dns_configure_resolver`: Whether to add 127.0.0.1 to `/etc/resolv.conf`
-- `netbox_url`: Base URL for the NetBox API
-- `netbox_token`: API token for NetBox
+- `bind_dns_netbox_url`: Base URL for the NetBox API
+- `bind_dns_netbox_token`: API token for NetBox
+- `bind_dns_netbox_validate_certs`: Validate the NetBox TLS certificate (default `true`)
 - `bind_dns_zerotier_ip`: IP address of the ZeroTier interface (auto-detected). Ports are bound to this address so BIND listens only on ZeroTier
 - `bind_dns_compose_path`: Directory where `docker-compose.yml` is generated (defaults to `bind_dns_dir`)
 

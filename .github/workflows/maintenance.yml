@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: production-maintenance
+  group: production-operations
   cancel-in-progress: false
 
 jobs:
@@ -40,18 +40,21 @@ jobs:
           ANSIBLE_INVENTORY: ${{ secrets.ANSIBLE_INVENTORY }}
         run: |
           test -n "$ANSIBLE_INVENTORY"
-          install -d -m 0700 ansible/inventories/runtime
-          printf '%s\n' "$ANSIBLE_INVENTORY" > ansible/inventories/runtime/hosts.yml
-          chmod 0600 ansible/inventories/runtime/hosts.yml
+          printf '%s\n' "$ANSIBLE_INVENTORY" > "$RUNNER_TEMP/ansible-inventory.yml"
+          chmod 0600 "$RUNNER_TEMP/ansible-inventory.yml"
 
       - name: Apply system updates
         working-directory: ansible
         run: >-
           ansible-playbook playbooks/apply_updates.yml
-          --inventory inventories/runtime/hosts.yml
+          --inventory "$RUNNER_TEMP/ansible-inventory.yml"
 
       - name: Clean unused Docker resources
         working-directory: ansible
         run: >-
           ansible-playbook playbooks/docker_cleanup.yml
-          --inventory inventories/runtime/hosts.yml
+          --inventory "$RUNNER_TEMP/ansible-inventory.yml"
+
+      - name: Remove private inventory
+        if: always()
+        run: rm -f "$RUNNER_TEMP/ansible-inventory.yml"
