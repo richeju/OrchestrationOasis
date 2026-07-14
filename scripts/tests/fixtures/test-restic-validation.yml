@@ -1,0 +1,33 @@
+---
+- name: Refuse a repository/remote mismatch
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    restic_backup_name: test-restic-backup
+    restic_repository: rclone:wrong-remote:Backups/test
+    restic_rclone_remote: expected-remote
+    restic_backup_paths:
+      - /etc
+    restic_check_data_subset: 5%
+  tasks:
+    - name: Exercise mismatch guard
+      block:
+        - name: Attempt validation with different remotes
+          ansible.builtin.include_role:
+            name: restic
+            tasks_from: validate
+
+        - name: Record unexpected validation success
+          ansible.builtin.set_fact:
+            restic_remote_guard_unexpectedly_succeeded: true
+      rescue:
+        - name: Record expected mismatch refusal
+          ansible.builtin.set_fact:
+            restic_remote_guard_refused_mismatch: true
+
+    - name: Require mismatch to fail before role execution
+      ansible.builtin.assert:
+        that:
+          - restic_remote_guard_refused_mismatch | default(false) | bool
+          - not (restic_remote_guard_unexpectedly_succeeded | default(false) | bool)

@@ -30,7 +30,7 @@ verifies the resulting mount.
 ## Inventory groups
 
 Linux baseline hosts belong to `linux`. Service groups correspond to tags in
-`site.yml`: `docker`, `ufw`, `zerotier`, `pcloud`, `dashboard`, `duplicati`,
+`site.yml`: `docker`, `ufw`, `zerotier`, `pcloud`, `dashboard`, `restic`,
 `prometheus`, `portainer`, `netbox`, `bind_dns`, `k3s`, and `yubikey`.
 `openbao` is the private secrets-service group and should only target hosts
 reachable through a trusted administration network.

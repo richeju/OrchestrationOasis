@@ -1,0 +1,6 @@
+---
+- name: Configure encrypted Restic backups to pCloud
+  hosts: restic
+  become: true
+  roles:
+    - restic

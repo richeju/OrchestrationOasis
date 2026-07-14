@@ -1,0 +1,42 @@
+---
+- name: Render Restic role templates for validation
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - restic-vars.yml
+  vars:
+    restic_repository: >-
+      rclone:test-remote:Backups/path with # and $(touch {{ test_output_dir }}/injected)
+    restic_rclone_remote: test-remote
+    restic_rclone_config: "{{ test_output_dir }}/rclone config #1"
+    restic_password_file: "{{ test_output_dir }}/password file 'quoted'"
+    restic_cache_dir: "{{ test_output_dir }}/cache with spaces"
+    restic_backup_host: "host with 'quote' and $dollar"
+    restic_environment_file: "{{ test_output_dir }}/restic.env"
+    restic_script_path: "{{ test_output_dir }}/restic-backup.sh"
+    restic_audit_script_path: "{{ test_output_dir }}/restic-backup-audit.sh"
+    restic_service_path: "{{ test_output_dir }}/restic-backup.service"
+    restic_timer_path: "{{ test_output_dir }}/restic-backup.timer"
+  tasks:
+    - name: Render Restic test artifacts
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../../ansible/playbooks/roles/restic/templates/{{ item.src }}"
+        dest: "{{ test_output_dir }}/{{ item.dest }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - src: restic.env.j2
+          dest: restic.env
+          mode: "0600"
+        - src: restic-backup.sh.j2
+          dest: restic-backup.sh
+          mode: "0700"
+        - src: restic-backup-audit.sh.j2
+          dest: restic-backup-audit.sh
+          mode: "0700"
+        - src: restic-backup.service.j2
+          dest: restic-backup.service
+          mode: "0644"
+        - src: restic-backup.timer.j2
+          dest: restic-backup.timer
+          mode: "0644"

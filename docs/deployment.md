@@ -35,7 +35,8 @@ group explicitly.
 | `ufw` | Console or recovery access before changing firewall policy |
 | `dashboard`, `portainer`, `netbox` | Docker and an existing `zt*` ZeroTier interface |
 | `bind_dns` | Docker, ZeroTier, reachable NetBox API, API endpoint and token |
-| `duplicati`, `prometheus`, `zerotier` | Docker |
+| `prometheus`, `zerotier` | Docker |
+| `restic` | Root-only rclone config, repository password file, explicit source paths |
 | `pcloud` | Valid rclone pCloud token |
 | `openbao` | Docker and TLS CA/certificate/key already provisioned or supplied |
 | `k3s` | Dedicated Linux host recommended; do not assume Docker coexistence is safe |
@@ -88,8 +89,11 @@ and these repository or environment secrets:
 - `PCLOUD_TOKEN`: required by pCloud;
 - `NETBOX_DB_PASSWORD`, `NETBOX_REDIS_PASSWORD`, `NETBOX_SECRET_KEY`: NetBox;
 - `NETBOX_API_ENDPOINT`, `NETBOX_API_TOKEN`: BIND and dynamic inventory access;
-- `DUPLICATI_WEB_PASSWORD`: Duplicati web UI;
-- `DUPLICATI_SETTINGS_KEY`: optional Duplicati settings encryption key.
+
+The standard workflow never transmits a Restic repository password. Restic
+requires an existing root-owned `0600` password file and initialized repository.
+One-time provisioning must happen through a protected administrative session,
+not a routine CI deployment.
 
 The deploy workflow defaults to check mode. Check and apply are separate runs:
 record the commit SHA shown by GitHub and confirm it has not changed before

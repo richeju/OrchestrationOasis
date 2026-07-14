@@ -21,7 +21,7 @@ all:
       hosts: {}
     dashboard:
       hosts: {}
-    duplicati:
+    restic:
       hosts: {}
     prometheus:
       hosts: {}

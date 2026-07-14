@@ -1,0 +1,13 @@
+---
+- name: Validate Restic backup configuration
+  ansible.builtin.assert:
+    that:
+      - restic_backup_name is ansible.builtin.match('^[a-z0-9][a-z0-9-]+$')
+      - restic_repository is ansible.builtin.match('^rclone:[^:]+:.+')
+      - restic_rclone_remote | length > 0
+      - restic_repository.split(':')[1] == restic_rclone_remote
+      - restic_backup_paths | length > 0
+      - restic_check_data_subset is ansible.builtin.match('^(100|[1-9][0-9]?)%$')
+    fail_msg: >-
+      Configure matching rclone remote and Restic repository values, at least
+      one backup path, and a read-data subset between 1% and 100%.

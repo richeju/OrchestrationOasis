@@ -11,7 +11,7 @@ credential belongs in Git.
 ## Managed services
 
 The complete Linux playbook can manage system updates, Docker, UFW, ZeroTier,
-pCloud through rclone, Dashy, Duplicati, Prometheus, Portainer, NetBox, BIND,
+pCloud through rclone, Dashy, encrypted Restic backups, Prometheus, Portainer, NetBox, BIND,
 k3s, OpenBao, and YubiKey SSH authentication. A host receives only the roles represented
 by its inventory groups.
 
@@ -66,12 +66,11 @@ supported deployment variables are:
 - `NETBOX_SECRET_KEY`
 - `NETBOX_API_ENDPOINT`
 - `NETBOX_API_TOKEN`
-- `DUPLICATI_WEB_PASSWORD`
-- `DUPLICATI_SETTINGS_KEY` (optional)
 
-The pCloud, NetBox, and Duplicati roles fail before making changes when their required
-secrets are missing or clearly unsafe. See [deployment](docs/deployment.md) for
-GitHub environment setup.
+The pCloud and NetBox roles fail before making changes when required secrets are
+missing or clearly unsafe. Restic uses existing root-only credentials and never
+receives its repository password from the standard deployment workflow. See
+[deployment](docs/deployment.md) for GitHub environment setup.
 
 ## Repository layout
 
@@ -91,6 +90,7 @@ Further reading:
 - [Architecture](docs/architecture.md)
 - [Deployment and GitHub Actions](docs/deployment.md)
 - [pCloud operations](docs/pcloud.md)
+- [Restic backup and restore](docs/restic.md)
 - [OpenBao operations](docs/openbao.md)
 - [Security notes](README.security.md)
 - [Known technical debt](docs/technical-debt.md)
