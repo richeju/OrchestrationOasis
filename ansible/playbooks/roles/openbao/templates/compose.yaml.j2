@@ -1,0 +1,21 @@
+services:
+  openbao:
+    image: "{{ openbao_image }}"
+    container_name: openbao
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command: server
+    ports:
+      - "{{ openbao_bind_address }}:{{ openbao_port }}:8200"
+    volumes:
+      - ./config/openbao.hcl:/openbao/config/openbao.hcl:ro
+      - ./tls:/openbao/tls:ro
+      - ./data:/openbao/data
+      - ./logs:/openbao/logs
+    networks:
+      - openbao
+
+networks:
+  openbao:
+    name: openbao

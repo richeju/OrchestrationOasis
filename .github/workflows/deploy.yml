@@ -21,6 +21,7 @@ name: Deploy
           - prometheus
           - portainer
           - netbox
+          - openbao
           - bind_dns
           - k3s
           - yubikey

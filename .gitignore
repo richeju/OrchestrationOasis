@@ -12,3 +12,15 @@ ansible/inventories/runtime/
 .venv/
 *.retry
 .vault_pass
+
+# Secret and PKI material must stay outside this public repository
+*.key
+*.pem
+*.p12
+*.pfx
+*.token
+*.pass
+**/tls/
+**/init.json
+**/*approle*.json
+**/*.snap

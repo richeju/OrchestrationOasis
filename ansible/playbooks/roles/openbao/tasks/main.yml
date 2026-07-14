@@ -1,0 +1,138 @@
+---
+- name: Validate OpenBao security settings
+  ansible.builtin.assert:
+    that:
+      - openbao_image is not search(':latest$')
+      - openbao_bind_address not in ['0.0.0.0', '::', '']
+      - openbao_api_address | length > 0
+      - openbao_port | int > 0
+      - openbao_port | int < 65536
+    fail_msg: >-
+      Pin the OpenBao image and bind it to a loopback or private-network
+      address. Public wildcard listeners are deliberately rejected.
+
+- name: Validate managed TLS source paths
+  ansible.builtin.assert:
+    that:
+      - openbao_tls_ca_source | length > 0
+      - openbao_tls_cert_source | length > 0
+      - openbao_tls_key_source | length > 0
+    fail_msg: >-
+      Set all three controller-side TLS source paths when
+      openbao_manage_tls is enabled.
+  when: openbao_manage_tls | bool
+
+- name: Create OpenBao configuration directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - "{{ openbao_dir }}"
+    - "{{ openbao_dir }}/config"
+    - "{{ openbao_dir }}/tls"
+
+- name: Create OpenBao runtime directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ openbao_container_uid }}"
+    group: "{{ openbao_container_gid }}"
+    mode: '0700'
+  loop:
+    - "{{ openbao_dir }}/data"
+    - "{{ openbao_dir }}/logs"
+
+- name: Install OpenBao TLS material
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ openbao_container_uid }}"
+    group: "{{ openbao_container_gid }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - src: "{{ openbao_tls_ca_source }}"
+      dest: "{{ openbao_tls_ca_path }}"
+      mode: '0644'
+    - src: "{{ openbao_tls_cert_source }}"
+      dest: "{{ openbao_tls_cert_path }}"
+      mode: '0644'
+    - src: "{{ openbao_tls_key_source }}"
+      dest: "{{ openbao_tls_key_path }}"
+      mode: '0600'
+  loop_control:
+    label: "{{ item.dest }}"
+  no_log: true
+  when: openbao_manage_tls | bool
+
+- name: Inspect required OpenBao TLS files
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ openbao_tls_ca_path }}"
+    - "{{ openbao_tls_cert_path }}"
+    - "{{ openbao_tls_key_path }}"
+  register: openbao_tls_files
+
+- name: Require complete TLS material on the managed host
+  ansible.builtin.assert:
+    that:
+      - openbao_tls_files.results | map(attribute='stat.exists') | min
+      - openbao_tls_files.results | map(attribute='stat.isreg') | min
+    fail_msg: >-
+      OpenBao requires a CA certificate, server certificate, and private key.
+      Provision them outside Git or enable openbao_manage_tls.
+
+- name: Deploy OpenBao server configuration
+  ansible.builtin.template:
+    src: openbao.hcl.j2
+    dest: "{{ openbao_dir }}/config/openbao.hcl"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Deploy OpenBao Compose project
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ openbao_dir }}/compose.yaml"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Configure OpenBao audit-log rotation
+  ansible.builtin.template:
+    src: openbao.logrotate.j2
+    dest: /etc/logrotate.d/openbao
+    owner: root
+    group: root
+    mode: '0644'
+  when: openbao_logrotate_enabled | bool
+
+- name: Launch OpenBao stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ openbao_dir }}"
+    state: present
+    pull: missing
+  register: openbao_compose
+
+- name: Verify that the OpenBao API responds through trusted TLS
+  ansible.builtin.uri:
+    url: "https://{{ openbao_api_address }}:{{ openbao_port }}/v1/sys/health"
+    method: GET
+    ca_path: "{{ openbao_tls_ca_path }}"
+    status_code: [200, 429, 472, 473, 501, 503]
+    return_content: true
+  register: openbao_health
+  check_mode: false
+  retries: 10
+  delay: 2
+  until: openbao_health.status in [200, 429, 472, 473, 501, 503]
+
+- name: Report OpenBao lifecycle state
+  ansible.builtin.debug:
+    msg:
+      - "API HTTP status: {{ openbao_health.status }}"
+      - "Initialized: {{ openbao_health.json.initialized | default(false) }}"
+      - "Sealed: {{ openbao_health.json.sealed | default(true) }}"

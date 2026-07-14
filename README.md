@@ -12,7 +12,7 @@ credential belongs in Git.
 
 The complete Linux playbook can manage system updates, Docker, UFW, ZeroTier,
 pCloud through rclone, Dashy, Duplicati, Prometheus, Portainer, NetBox, BIND,
-k3s, and YubiKey SSH authentication. A host receives only the roles represented
+k3s, OpenBao, and YubiKey SSH authentication. A host receives only the roles represented
 by its inventory groups.
 
 ## Quick start
@@ -84,4 +84,5 @@ Further reading:
 - [Architecture](docs/architecture.md)
 - [Deployment and GitHub Actions](docs/deployment.md)
 - [pCloud operations](docs/pcloud.md)
+- [OpenBao operations](docs/openbao.md)
 - [Security notes](README.security.md)

@@ -1,0 +1,26 @@
+ui = true
+log_level = "{{ openbao_log_level }}"
+api_addr = "https://{{ openbao_api_address }}:{{ openbao_port }}"
+cluster_addr = "https://openbao:8201"
+
+audit "file" "file-audit" {
+  description = "OpenBao audit log"
+  options = {
+    file_path = "/openbao/logs/audit.log"
+    mode      = "0600"
+  }
+}
+
+storage "raft" {
+  path    = "/openbao/data"
+  node_id = "openbao-1"
+}
+
+listener "tcp" {
+  address         = "0.0.0.0:8200"
+  cluster_address = "0.0.0.0:8201"
+  tls_disable     = false
+  tls_cert_file   = "/openbao/tls/server.crt"
+  tls_key_file    = "/openbao/tls/server.key"
+  tls_min_version = "tls12"
+}
