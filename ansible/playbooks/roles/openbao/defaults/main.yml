@@ -1,0 +1,22 @@
+---
+openbao_image: "openbao/openbao:2.5.5"
+openbao_dir: "/opt/openbao"
+openbao_bind_address: "127.0.0.1"
+openbao_api_address: "{{ openbao_bind_address }}"
+openbao_port: 8200
+openbao_container_uid: "100"
+openbao_container_gid: "1000"
+
+# TLS material is never stored in Git. Leave false when certificates already
+# exist on the managed host, or provide controller-side source paths.
+openbao_manage_tls: false
+openbao_tls_ca_source: ""
+openbao_tls_cert_source: ""
+openbao_tls_key_source: ""
+openbao_tls_ca_path: "{{ openbao_dir }}/tls/ca.crt"
+openbao_tls_cert_path: "{{ openbao_dir }}/tls/server.crt"
+openbao_tls_key_path: "{{ openbao_dir }}/tls/server.key"
+
+openbao_log_level: "info"
+openbao_logrotate_enabled: true
+openbao_logrotate_retention: 14

@@ -32,6 +32,8 @@ verifies the resulting mount.
 Linux baseline hosts belong to `linux`. Service groups correspond to tags in
 `site.yml`: `docker`, `ufw`, `zerotier`, `pcloud`, `dashboard`, `duplicati`,
 `prometheus`, `portainer`, `netbox`, `bind_dns`, `k3s`, and `yubikey`.
+`openbao` is the private secrets-service group and should only target hosts
+reachable through a trusted administration network.
 
 Windows hosts remain outside `site.yml` and use the dedicated Chocolatey
 playbooks.

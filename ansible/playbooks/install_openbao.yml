@@ -1,0 +1,6 @@
+---
+- name: Deploy private OpenBao secret storage
+  hosts: openbao
+  become: true
+  roles:
+    - openbao

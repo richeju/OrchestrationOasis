@@ -1,0 +1,9 @@
+{{ openbao_dir }}/logs/audit.log {
+    daily
+    rotate {{ openbao_logrotate_retention }}
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}
