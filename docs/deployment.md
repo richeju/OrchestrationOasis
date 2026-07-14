@@ -33,13 +33,12 @@ group explicitly.
 | `linux` | Debian target and passwordless non-interactive sudo |
 | `docker` | `linux` host; installs the Docker Engine |
 | `ufw` | Console or recovery access before changing firewall policy |
-| `dashboard`, `portainer`, `netbox` | Docker and an existing `zt*` ZeroTier interface |
+| `dashboard`, `netbox` | Docker and an existing `zt*` ZeroTier interface |
 | `bind_dns` | Docker, ZeroTier, reachable NetBox API, API endpoint and token |
 | `prometheus`, `zerotier` | Docker |
 | `restic` | Root-only rclone config, repository password file, explicit source paths |
 | `pcloud` | Valid rclone pCloud token |
 | `openbao` | Docker and TLS CA/certificate/key already provisioned or supplied |
-| `k3s` | Dedicated Linux host recommended; do not assume Docker coexistence is safe |
 | `yubikey` | At least one tested U2F mapping and an out-of-band recovery session |
 
 Membership in a service group does not automatically add the host to every

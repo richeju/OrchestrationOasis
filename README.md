@@ -11,9 +11,9 @@ credential belongs in Git.
 ## Managed services
 
 The complete Linux playbook can manage system updates, Docker, UFW, ZeroTier,
-pCloud through rclone, Dashy, encrypted Restic backups, Prometheus, Portainer, NetBox, BIND,
-k3s, OpenBao, and YubiKey SSH authentication. A host receives only the roles represented
-by its inventory groups.
+pCloud through rclone, Dashy, encrypted Restic backups, Prometheus, NetBox,
+BIND, OpenBao, and YubiKey SSH authentication. A host receives only the roles
+represented by its inventory groups.
 
 ## Quick start
 

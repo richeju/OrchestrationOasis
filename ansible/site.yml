@@ -33,10 +33,6 @@
   ansible.builtin.import_playbook: playbooks/install_prometheus.yml
   tags: [prometheus]
 
-- name: Deploy Portainer
-  ansible.builtin.import_playbook: playbooks/install_portainer.yml
-  tags: [portainer]
-
 - name: Deploy NetBox
   ansible.builtin.import_playbook: playbooks/install_netbox.yml
   tags: [netbox]
@@ -48,10 +44,6 @@
 - name: Deploy BIND DNS
   ansible.builtin.import_playbook: playbooks/install_bind_dns.yml
   tags: [bind_dns]
-
-- name: Deploy k3s
-  ansible.builtin.import_playbook: playbooks/install_k3s.yml
-  tags: [k3s]
 
 - name: Configure YubiKey authentication
   ansible.builtin.import_playbook: playbooks/install_yubikey.yml

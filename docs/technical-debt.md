@@ -7,17 +7,11 @@ but deliberately not changed without service-specific migration testing.
 
 ### Mutable container images
 
-Dashy, NetBox, Portainer, Prometheus, and ZeroTier still default to
+Dashy, NetBox, Prometheus, and ZeroTier still default to
 `latest`; BIND, PostgreSQL, and Redis use broad mutable tags. Replacing them
 requires identifying the versions currently deployed, reading each migration
 path, testing persistent data, and then pinning tags or digests. Do not perform
 a blind bulk update.
-
-### k3s bootstrap provenance
-
-The k3s role downloads and runs `get.k3s.io` without a pinned release or
-checksum. Replace it with a versioned, checksum-verified installation before
-using the role on a production cluster.
 
 ### NetBox topology and Redis authentication
 
@@ -35,8 +29,6 @@ the `DOCKER-USER` chain.
 
 ## Medium priority
 
-- Portainer has read-write access to the Docker socket and therefore effective
-  host-root capability.
 - Most containers still lack explicit capability drops, read-only filesystems,
   resource limits, and `no-new-privileges`.
 - Docker cleanup removes all unused images and can remove a local rollback

@@ -19,11 +19,9 @@ name: Deploy
           - dashboard
           - restic
           - prometheus
-          - portainer
           - netbox
           - openbao
           - bind_dns
-          - k3s
           - yubikey
       check:
         description: Run in check mode without applying changes

@@ -25,15 +25,11 @@ all:
       hosts: {}
     prometheus:
       hosts: {}
-    portainer:
-      hosts: {}
     netbox:
       hosts: {}
     openbao:
       hosts: {}
     bind_dns:
-      hosts: {}
-    k3s:
       hosts: {}
     yubikey:
       hosts: {}
