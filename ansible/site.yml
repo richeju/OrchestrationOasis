@@ -25,9 +25,9 @@
   ansible.builtin.import_playbook: playbooks/install_dashboard.yml
   tags: [dashboard]
 
-- name: Deploy Duplicati
-  ansible.builtin.import_playbook: playbooks/install_duplicati.yml
-  tags: [duplicati]
+- name: Configure encrypted Restic backups
+  ansible.builtin.import_playbook: playbooks/install_restic.yml
+  tags: [restic]
 
 - name: Deploy Prometheus
   ansible.builtin.import_playbook: playbooks/install_prometheus.yml

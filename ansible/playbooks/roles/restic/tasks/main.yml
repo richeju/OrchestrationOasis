@@ -1,0 +1,183 @@
+---
+- name: Validate Restic configuration before changes
+  ansible.builtin.include_tasks: validate.yml
+
+- name: Install Restic backup packages
+  ansible.builtin.apt:
+    name:
+      - restic
+      - rclone
+    state: present
+    update_cache: true
+
+- name: Create Restic directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ restic_password_file | dirname }}"
+      mode: "0700"
+    - path: "{{ restic_cache_dir }}"
+      mode: "0700"
+
+- name: Enforce safe Restic password-file handling
+  ansible.builtin.include_tasks: password.yml
+
+- name: Inspect Restic prerequisites
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ restic_rclone_config }}"
+    - "{{ restic_password_file }}"
+  register: restic_prerequisite_files
+  no_log: true
+
+- name: Require root-only rclone and Restic credentials
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isreg
+      - item.stat.pw_name == 'root'
+      - item.stat.mode == '0600'
+    fail_msg: >-
+      {{ item.item }} must exist as a root-owned regular file with mode 0600.
+      Provision it outside Git. Password rotation must use restic key commands.
+  loop: "{{ restic_prerequisite_files.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  no_log: true
+
+- name: Inspect configured backup paths
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ restic_backup_paths }}"
+  register: restic_source_paths
+  no_log: true
+
+- name: Refuse missing backup sources
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+    fail_msg: "Configured Restic source does not exist: {{ item.item }}"
+  loop: "{{ restic_source_paths.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  no_log: true
+
+- name: Verify pCloud rclone access
+  ansible.builtin.command:
+    argv:
+      - rclone
+      - --config
+      - "{{ restic_rclone_config }}"
+      - lsd
+      - "{{ restic_rclone_remote }}:"
+  changed_when: false
+  check_mode: false
+  no_log: true
+
+- name: Install Restic environment
+  ansible.builtin.template:
+    src: restic.env.j2
+    dest: "{{ restic_environment_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Probe Restic repository
+  ansible.builtin.command:
+    argv:
+      - restic
+      - snapshots
+      - --compact
+  environment:
+    RESTIC_REPOSITORY: "{{ restic_repository }}"
+    RESTIC_PASSWORD_FILE: "{{ restic_password_file }}"
+    RCLONE_CONFIG: "{{ restic_rclone_config }}"
+    RESTIC_CACHE_DIR: "{{ restic_cache_dir }}"
+  register: restic_repository_probe
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  no_log: true
+
+- name: Refuse an inaccessible or uninitialized repository
+  ansible.builtin.assert:
+    that:
+      - restic_repository_probe.rc == 0
+    fail_msg: >-
+      The Restic repository is inaccessible. Check pCloud connectivity,
+      repository path, and password. This role never initializes repositories;
+      bootstrap a new repository manually before enabling its timer.
+
+- name: Install Restic backup tooling
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - src: restic-backup.sh.j2
+      dest: "{{ restic_script_path }}"
+      mode: "0700"
+    - src: restic-backup-audit.sh.j2
+      dest: "{{ restic_audit_script_path }}"
+      mode: "0700"
+    - src: restic-backup.service.j2
+      dest: "{{ restic_service_path }}"
+      mode: "0644"
+    - src: restic-backup.timer.j2
+      dest: "{{ restic_timer_path }}"
+      mode: "0644"
+  notify: Restart Restic timer
+
+- name: Validate generated backup script
+  ansible.builtin.command:
+    argv:
+      - bash
+      - -n
+      - "{{ restic_script_path }}"
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Validate generated systemd units
+  ansible.builtin.command:
+    argv:
+      - systemd-analyze
+      - verify
+      - "{{ restic_service_path }}"
+      - "{{ restic_timer_path }}"
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Apply pending Restic timer changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable the Restic backup timer
+  ansible.builtin.systemd_service:
+    name: "{{ restic_backup_name }}.timer"
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Verify that no stale Restic lock remains
+  ansible.builtin.command:
+    argv:
+      - restic
+      - list
+      - locks
+  environment:
+    RESTIC_REPOSITORY: "{{ restic_repository }}"
+    RESTIC_PASSWORD_FILE: "{{ restic_password_file }}"
+    RCLONE_CONFIG: "{{ restic_rclone_config }}"
+    RESTIC_CACHE_DIR: "{{ restic_cache_dir }}"
+  register: restic_locks
+  changed_when: false
+  failed_when: restic_locks.rc != 0 or restic_locks.stdout | trim | length > 0
+  check_mode: false
+  no_log: true

@@ -1,0 +1,31 @@
+---
+restic_backup_name: infraforge-backup
+restic_repository: rclone:pcloud-backup:Backups/infraforge-vps
+restic_rclone_remote: pcloud-backup
+restic_rclone_config: /root/.config/rclone/rclone.conf
+restic_password_file: /root/.config/restic/infraforge-repo.pass
+restic_environment_file: /root/.config/restic/infraforge.env
+restic_repository_password: >-
+  {{ lookup('ansible.builtin.env', 'RESTIC_REPOSITORY_PASSWORD') | default('', true) }}
+restic_provision_password_file: false
+restic_cache_dir: /var/cache/restic
+restic_script_path: /usr/local/sbin/infraforge-backup.sh
+restic_audit_script_path: /usr/local/sbin/infraforge-backup-audit.sh
+restic_service_path: /etc/systemd/system/infraforge-backup.service
+restic_timer_path: /etc/systemd/system/infraforge-backup.timer
+restic_backup_host: "{{ ansible_hostname | default(inventory_hostname) }}"
+
+# Every source must be selected explicitly in production inventory.
+restic_backup_paths: []
+restic_exclude_patterns: []
+restic_one_file_system: true
+restic_exclude_caches: true
+
+restic_keep_daily: 7
+restic_keep_weekly: 4
+restic_keep_monthly: 6
+restic_check_data_subset: 5%
+
+restic_timer_calendar: "*-*-* 03:20:00"
+restic_timer_randomized_delay: 20m
+restic_timer_persistent: true

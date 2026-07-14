@@ -1,0 +1,10 @@
+[Unit]
+Description=Run encrypted Restic backup daily
+
+[Timer]
+OnCalendar={{ restic_timer_calendar }}
+RandomizedDelaySec={{ restic_timer_randomized_delay }}
+Persistent={{ restic_timer_persistent | ternary('true', 'false') }}
+
+[Install]
+WantedBy=timers.target

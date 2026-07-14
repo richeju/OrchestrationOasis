@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $EUID -ne 0 ]]; then
+  printf 'This audit must run as root.\n' >&2
+  exit 1
+fi
+
+set -a
+# shellcheck disable=SC1091
+source {{ restic_environment_file | quote }}
+set +a
+
+export LC_ALL=C.UTF-8
+export RESTIC_CACHE_DIR=${RESTIC_CACHE_DIR:-{{ restic_cache_dir | quote }}}
+mkdir -p "$RESTIC_CACHE_DIR"
+
+python3 - <<'PY'
+import datetime
+import json
+import subprocess
+
+SERVICE = {{ (restic_backup_name ~ '.service') | to_json }}
+TIMER = {{ (restic_backup_name ~ '.timer') | to_json }}
+
+
+def run(command):
+    process = subprocess.run(command, capture_output=True, text=True, check=False)
+    return process.returncode, process.stdout, process.stderr
+
+
+def run_ok(command):
+    code, stdout, stderr = run(command)
+    if code != 0:
+        raise RuntimeError((stderr or stdout).strip())
+    return stdout
+
+
+def systemd_properties(unit, names):
+    result = {}
+    for name in names:
+        output = run_ok(["systemctl", "show", unit, f"-p{name}"])
+        result[name] = output.strip().split("=", 1)[1]
+    return result
+
+service = systemd_properties(
+    SERVICE,
+    ["Result", "ExecMainStartTimestamp", "ExecMainExitTimestamp",
+     "ExecMainStatus", "ActiveState", "SubState"],
+)
+timer = systemd_properties(TIMER, ["NextElapseUSecRealtime", "LastTriggerUSec"])
+snapshots = json.loads(run_ok(["restic", "snapshots", "--json"]))
+latest = snapshots[-1] if snapshots else None
+latest_time = latest["time"] if latest else None
+age_hours = None
+if latest_time:
+    timestamp = datetime.datetime.fromisoformat(latest_time)
+    age_hours = round(
+        (datetime.datetime.now(timestamp.tzinfo) - timestamp).total_seconds() / 3600,
+        2,
+    )
+
+lock_ids = [item for item in run_ok(["restic", "list", "locks"]).splitlines() if item]
+status = "ok"
+reasons = []
+if service.get("Result") != "success" or service.get("ExecMainStatus") not in ("0", ""):
+    status = "degraded"
+    reasons.append("last_service_run_not_success")
+if latest is None:
+    status = "degraded"
+    reasons.append("no_snapshot")
+elif age_hours is not None and age_hours > 36:
+    status = "degraded"
+    reasons.append("snapshot_too_old")
+if lock_ids:
+    status = "degraded"
+    reasons.append("restic_locks_present")
+
+_, journal, _ = run(["journalctl", "-u", SERVICE, "-n", "12", "--no-pager"])
+print(json.dumps({
+    "status": status,
+    "reasons": reasons,
+    "service": service,
+    "timer": timer,
+    "snapshot_count": len(snapshots),
+    "latest_snapshot": {
+        "time": latest_time,
+        "age_hours": age_hours,
+        "short_id": latest.get("short_id") if latest else None,
+        "paths": latest.get("paths") if latest else None,
+    },
+    "locks": lock_ids,
+    "journal_tail": journal.strip().splitlines()[-12:],
+}, ensure_ascii=False, indent=2))
+PY

@@ -7,7 +7,7 @@ but deliberately not changed without service-specific migration testing.
 
 ### Mutable container images
 
-Dashy, Duplicati, NetBox, Portainer, Prometheus, and ZeroTier still default to
+Dashy, NetBox, Portainer, Prometheus, and ZeroTier still default to
 `latest`; BIND, PostgreSQL, and Redis use broad mutable tags. Replacing them
 requires identifying the versions currently deployed, reading each migration
 path, testing persistent data, and then pinning tags or digests. Do not perform
@@ -28,7 +28,7 @@ against the pinned NetBox release and existing data.
 
 ### Container exposure and host firewalling
 
-Prometheus and Duplicati publish ports without a private bind address. Docker
+Prometheus publishes a port without a private bind address. Docker
 published ports can also bypass assumptions made by UFW. Determine the intended
 VPN/LAN/public reachability for every service before changing bind addresses or
 the `DOCKER-USER` chain.

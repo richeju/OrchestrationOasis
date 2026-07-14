@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $EUID -ne 0 ]]; then
+  printf 'This backup must run as root.\n' >&2
+  exit 1
+fi
+
+exec 9>"/run/lock/{{ restic_backup_name }}.lock"
+if ! flock -n 9; then
+  printf 'Another {{ restic_backup_name }} run is active; skipping.\n'
+  exit 0
+fi
+
+set -a
+# shellcheck disable=SC1091
+source {{ restic_environment_file | quote }}
+set +a
+
+mkdir -p "$RESTIC_CACHE_DIR"
+
+backup_paths=(
+{% for path in restic_backup_paths %}
+  {{ path | quote }}
+{% endfor %}
+)
+exclude_args=(
+{% for pattern in restic_exclude_patterns %}
+  --exclude {{ pattern | quote }}
+{% endfor %}
+)
+
+restic backup \
+  "${backup_paths[@]}" \
+  "${exclude_args[@]}" \
+{% if restic_exclude_caches | bool %}
+  --exclude-caches \
+{% endif %}
+{% if restic_one_file_system | bool %}
+  --one-file-system \
+{% endif %}
+  --verbose
+
+restic forget \
+  --keep-daily {{ restic_keep_daily }} \
+  --keep-weekly {{ restic_keep_weekly }} \
+  --keep-monthly {{ restic_keep_monthly }} \
+  --prune
+
+restic check --read-data-subset={{ restic_check_data_subset | quote }}
+
+locks=$(restic list locks)
+if [[ -n $locks ]]; then
+  printf 'Restic locks remain after backup:\n%s\n' "$locks" >&2
+  exit 1
+fi

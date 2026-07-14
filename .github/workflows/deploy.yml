@@ -17,7 +17,7 @@ name: Deploy
           - zerotier
           - pcloud
           - dashboard
-          - duplicati
+          - restic
           - prometheus
           - portainer
           - netbox
@@ -78,8 +78,6 @@ jobs:
           NETBOX_SECRET_KEY: ${{ secrets.NETBOX_SECRET_KEY }}
           NETBOX_API_ENDPOINT: ${{ secrets.NETBOX_API_ENDPOINT }}
           NETBOX_API_TOKEN: ${{ secrets.NETBOX_API_TOKEN }}
-          DUPLICATI_WEB_PASSWORD: ${{ secrets.DUPLICATI_WEB_PASSWORD }}
-          DUPLICATI_SETTINGS_KEY: ${{ secrets.DUPLICATI_SETTINGS_KEY }}
           TARGET: ${{ inputs.target }}
           CHECK_MODE: ${{ inputs.check }}
         run: |

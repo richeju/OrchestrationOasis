@@ -1,0 +1,19 @@
+[Unit]
+Description=Encrypted Restic backup to pCloud
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart={{ restic_script_path }}
+User=root
+Group=root
+UMask=0077
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=read-only
+ProtectSystem=full
+TimeoutStartSec=6h
