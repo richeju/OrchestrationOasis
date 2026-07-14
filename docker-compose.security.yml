@@ -1,8 +1,10 @@
-version: "3.9"
 services:
   trivy:
-    image: aquasec/trivy:0.50.1
-    command: fs --exit-code 1 --severity HIGH,CRITICAL /project
+    image: aquasec/trivy:0.72.0
+    command: >-
+      fs --scanners vuln,misconfig,secret --ignore-unfixed --exit-code 1
+      --severity HIGH,CRITICAL --skip-dirs /project/.venv
+      --skip-dirs /project/.git --skip-dirs /project/.trivy-cache /project
     volumes:
       - ./:/project:ro
       - ./.trivy-cache:/root/.cache/

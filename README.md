@@ -17,7 +17,9 @@ by its inventory groups.
 
 ## Quick start
 
-Requirements: Python 3.12 or newer, GNU Make, and a Debian target reachable through SSH.
+Requirements: Git, Python 3.12 or newer with `venv`, GNU Make, an SSH
+identity, and a Debian target reachable through SSH with non-interactive sudo.
+Docker is required locally only for the Trivy security scan.
 
 ```bash
 python3 -m venv .venv
@@ -27,10 +29,13 @@ cp ansible/inventories/production/hosts.example.yml \
   ansible/inventories/production/hosts.yml
 ```
 
-Edit the copied inventory, then preview a deployment:
+The example enables only the `linux` and `docker` groups. Opt in to other roles
+after reviewing their prerequisites in [deployment](docs/deployment.md). Verify
+connectivity, then preview a deployment:
 
 ```bash
 cd ansible
+ansible all --inventory inventories/production/hosts.yml --module-name ping
 ansible-playbook site.yml \
   --inventory inventories/production/hosts.yml \
   --check --diff
@@ -59,6 +64,8 @@ supported deployment variables are:
 - `NETBOX_DB_PASSWORD`
 - `NETBOX_REDIS_PASSWORD`
 - `NETBOX_SECRET_KEY`
+- `NETBOX_API_ENDPOINT`
+- `NETBOX_API_TOKEN`
 - `DUPLICATI_WEB_PASSWORD`
 - `DUPLICATI_SETTINGS_KEY` (optional)
 
@@ -86,3 +93,4 @@ Further reading:
 - [pCloud operations](docs/pcloud.md)
 - [OpenBao operations](docs/openbao.md)
 - [Security notes](README.security.md)
+- [Known technical debt](docs/technical-debt.md)

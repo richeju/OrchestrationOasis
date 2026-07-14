@@ -8,13 +8,21 @@ runtime secrets and must remain outside Git.
 ## Inventory example
 
 ```yaml
-openbao:
-  hosts:
-    secrets-host:
-      openbao_dir: /opt/openbao
-      openbao_bind_address: 10.0.0.10
-      openbao_api_address: 10.0.0.10
+all:
+  children:
+    docker:
+      hosts:
+        secrets-host:
+    openbao:
+      hosts:
+        secrets-host:
+          openbao_dir: /opt/openbao
+          openbao_bind_address: 10.0.0.10
+          openbao_api_address: 10.0.0.10
 ```
+
+The host must belong to both `docker` and `openbao`. The OpenBao role does not
+install Docker implicitly.
 
 The server certificate must contain the configured API address in its SAN. Put
 `ca.crt`, `server.crt`, and `server.key` in `<openbao_dir>/tls/` before running
@@ -31,6 +39,10 @@ ansible-playbook playbooks/install_openbao.yml \
 ansible-playbook playbooks/install_openbao.yml \
   --inventory inventories/production/hosts.yml
 ```
+
+An initial check-mode run still requires Docker and the destination TLS files.
+The role performs a read-only health probe even in check mode when those
+prerequisites exist.
 
 ## Initialization and unseal
 

@@ -20,9 +20,12 @@ syntax:
 
 test:
 	./scripts/tests/run-lint.test.sh
+	./scripts/tests/safety-gates.test.sh
 
 check: lint syntax test
 
 scan:
-	docker run --rm -v $$PWD:/project -v $$PWD/.trivy-cache:/root/.cache/ \
-		aquasec/trivy:0.72.0 fs --exit-code 1 --severity HIGH,CRITICAL /project
+	docker run --rm -v $$PWD:/project:ro -v $$PWD/.trivy-cache:/root/.cache/ \
+		aquasec/trivy:0.72.0 fs --scanners vuln,misconfig,secret --ignore-unfixed \
+		--exit-code 1 --severity HIGH,CRITICAL --skip-dirs /project/.venv \
+		--skip-dirs /project/.git --skip-dirs /project/.trivy-cache /project

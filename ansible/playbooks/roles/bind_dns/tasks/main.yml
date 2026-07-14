@@ -1,5 +1,14 @@
 # ansible/playbooks/roles/bind_dns/tasks/main.yml
 ---
+- name: Validate NetBox API configuration
+  ansible.builtin.assert:
+    that:
+      - bind_dns_netbox_url | length > 0
+      - bind_dns_netbox_token | length > 0
+    fail_msg: >-
+      BIND requires bind_dns_netbox_url and bind_dns_netbox_token. Set them
+      with Ansible Vault or the NETBOX_API_ENDPOINT and NETBOX_API_TOKEN
+      environment variables.
 - name: Ensure Docker is installed
   ansible.builtin.include_role:
     name: docker
@@ -36,13 +45,13 @@
 
 - name: Query NetBox for IP addresses
   ansible.builtin.uri:
-    url: "{{ netbox_url }}/api/ipam/ip-addresses/?limit=0"
+    url: "{{ bind_dns_netbox_url }}/api/ipam/ip-addresses/?limit=0"
     method: GET
     headers:
-      Authorization: "Token {{ netbox_token }}"
+      Authorization: "Token {{ bind_dns_netbox_token }}"
       Accept: application/json
     return_content: true
-    validate_certs: false
+    validate_certs: "{{ bind_dns_netbox_validate_certs }}"
   register: bind_dns_netbox_hosts
 
 - name: Deploy forward zone file
@@ -52,7 +61,7 @@
     mode: '0644'
   vars:
     dns_records: "{{ bind_dns_netbox_hosts.json.results }}"
-    zone_serial: "{{ '%Y%m%d%H' | strftime }}"
+    zone_serial: "{{ ansible_date_time.epoch }}"
   notify: restart bind
 
 - name: Deploy reverse zone file
@@ -62,7 +71,7 @@
     mode: '0644'
   vars:
     dns_records: "{{ bind_dns_netbox_hosts.json.results }}"
-    zone_serial: "{{ '%Y%m%d%H' | strftime }}"
+    zone_serial: "{{ ansible_date_time.epoch }}"
   notify: restart bind
 
 - name: Deploy named.conf

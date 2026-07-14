@@ -7,7 +7,7 @@ $TTL 3600
         86400 )     ; Negative Cache TTL
 
 @   IN  NS  ns1.{{ bind_dns_domain }}.
-ns1 IN A {{ ansible_default_ipv4.address }}
+ns1 IN A {{ bind_dns_zerotier_ip }}
 
 {% for host in dns_records %}
 {% set name = host.dns_name | default(host.assigned_object.hostname | default(host.assigned_object.name | default(''))) %}

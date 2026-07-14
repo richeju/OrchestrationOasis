@@ -35,7 +35,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: production-deploy
+  group: production-operations
   cancel-in-progress: false
 
 jobs:
@@ -65,9 +65,8 @@ jobs:
           ANSIBLE_INVENTORY: ${{ secrets.ANSIBLE_INVENTORY }}
         run: |
           test -n "$ANSIBLE_INVENTORY"
-          install -d -m 0700 ansible/inventories/runtime
-          printf '%s\n' "$ANSIBLE_INVENTORY" > ansible/inventories/runtime/hosts.yml
-          chmod 0600 ansible/inventories/runtime/hosts.yml
+          printf '%s\n' "$ANSIBLE_INVENTORY" > "$RUNNER_TEMP/ansible-inventory.yml"
+          chmod 0600 "$RUNNER_TEMP/ansible-inventory.yml"
 
       - name: Execute deployment
         working-directory: ansible
@@ -77,16 +76,22 @@ jobs:
           NETBOX_DB_PASSWORD: ${{ secrets.NETBOX_DB_PASSWORD }}
           NETBOX_REDIS_PASSWORD: ${{ secrets.NETBOX_REDIS_PASSWORD }}
           NETBOX_SECRET_KEY: ${{ secrets.NETBOX_SECRET_KEY }}
+          NETBOX_API_ENDPOINT: ${{ secrets.NETBOX_API_ENDPOINT }}
+          NETBOX_API_TOKEN: ${{ secrets.NETBOX_API_TOKEN }}
           DUPLICATI_WEB_PASSWORD: ${{ secrets.DUPLICATI_WEB_PASSWORD }}
           DUPLICATI_SETTINGS_KEY: ${{ secrets.DUPLICATI_SETTINGS_KEY }}
           TARGET: ${{ inputs.target }}
           CHECK_MODE: ${{ inputs.check }}
         run: |
-          args=(site.yml --inventory inventories/runtime/hosts.yml --tags "$TARGET")
+          args=(site.yml --inventory "$RUNNER_TEMP/ansible-inventory.yml" --tags "$TARGET")
           if [[ "$TARGET" == "full" ]]; then
-            args=(site.yml --inventory inventories/runtime/hosts.yml)
+            args=(site.yml --inventory "$RUNNER_TEMP/ansible-inventory.yml")
           fi
           if [[ "$CHECK_MODE" == "true" ]]; then
             args+=(--check --diff)
           fi
           ansible-playbook "${args[@]}"
+
+      - name: Remove private inventory
+        if: always()
+        run: rm -f "$RUNNER_TEMP/ansible-inventory.yml"
