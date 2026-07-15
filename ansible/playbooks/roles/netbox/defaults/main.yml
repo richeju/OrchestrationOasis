@@ -1,4 +1,5 @@
 ---
+netbox_compact_stack_confirmed: false
 netbox_version: "latest"
 netbox_dir: "/opt/netbox"
 netbox_db_name: "netbox"

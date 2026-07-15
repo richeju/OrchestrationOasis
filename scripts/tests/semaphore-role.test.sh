@@ -2,12 +2,13 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+localhost_inventory="$repo_root/scripts/tests/fixtures/localhost-inventory.yml"
 export ANSIBLE_ROLES_PATH="$repo_root/ansible/playbooks/roles"
 output_dir=$(mktemp -d)
 trap 'rm -rf "$output_dir"' EXIT
 
 ansible-playbook \
-  --inventory localhost, \
+  --inventory "$localhost_inventory" \
   --extra-vars "test_output_dir=$output_dir" \
   "$repo_root/scripts/tests/fixtures/render-semaphore.yml" >/dev/null
 
@@ -32,6 +33,7 @@ fi
 
 inventory_example="$repo_root/ansible/inventories/semaphore-vps.example.yml"
 grep -F 'ansible_connection: ssh' "$inventory_example" >/dev/null
+grep -F 'infraforge_vps:' "$inventory_example" >/dev/null
 grep -F '/run/semaphore-runner/id_ed25519' "$inventory_example" >/dev/null
 grep -F 'StrictHostKeyChecking=yes' "$inventory_example" >/dev/null
 

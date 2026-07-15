@@ -1,0 +1,19 @@
+---
+- name: Render Prometheus Compose
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    prometheus_version: "v3.5.0"
+    prometheus_bind_address: "10.78.0.1"
+  tasks:
+    - name: Render Compose
+      ansible.builtin.template:
+        src: "{{ repo_root }}/ansible/playbooks/roles/prometheus/templates/docker-compose.yml.j2"
+        dest: "{{ output_dir }}/compose.yml"
+        mode: '0600'
+    - name: Create referenced Prometheus configuration
+      ansible.builtin.copy:
+        content: "global:\n  scrape_interval: 15s\n"
+        dest: "{{ output_dir }}/prometheus.yml"
+        mode: '0600'

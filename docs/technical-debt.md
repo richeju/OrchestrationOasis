@@ -13,19 +13,18 @@ requires identifying the versions currently deployed, reading each migration
 path, testing persistent data, and then pinning tags or digests. Do not perform
 a blind bulk update.
 
-### NetBox topology and Redis authentication
+### NetBox production topology
 
-The current compact stack omits NetBox worker and housekeeping services. It
-also writes a Redis password variable without configuring Redis `requirepass`.
-Adding workers or real Redis authentication requires coordinated testing
-against the pinned NetBox release and existing data.
+The guarded compact role now authenticates Redis and renders coherent secrets,
+but it still does not model the official production stack with workers,
+PostgreSQL 18 and Valkey. Reconcile or replace the role only after database,
+media, restore and rollback tests against a production-shaped fixture.
 
 ### Container exposure and host firewalling
 
-Prometheus publishes a port without a private bind address. Docker
-published ports can also bypass assumptions made by UFW. Determine the intended
-VPN/LAN/public reachability for every service before changing bind addresses or
-the `DOCKER-USER` chain.
+Prometheus now refuses wildcard publication by default. Docker-published ports
+can still bypass assumptions made by UFW. Determine the intended VPN/LAN/public
+reachability for every service before changing the `DOCKER-USER` chain.
 
 ## Medium priority
 
@@ -42,9 +41,7 @@ the `DOCKER-USER` chain.
 
 ## Validation backlog
 
-- Add `actionlint` to CI for workflow semantics.
-- Render every Compose template with fixture variables and run
-  `docker compose config`.
+- Extend the current Compose rendering suite to every remaining service role.
 - Add Molecule or equivalent runtime/idempotence tests for Docker, UFW, BIND,
   NetBox, OpenBao, and YubiKey.
 - Add health checks and post-deployment probes to older service roles.

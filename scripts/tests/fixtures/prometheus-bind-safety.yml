@@ -1,0 +1,8 @@
+---
+- name: Exercise Prometheus wildcard-bind safety guard
+  hosts: localhost
+  gather_facts: false
+  vars:
+    prometheus_bind_address: 0.0.0.0
+  roles:
+    - prometheus

@@ -1,3 +1,4 @@
 ---
 prometheus_version: "latest"
 prometheus_dir: "/opt/prometheus"
+prometheus_bind_address: "127.0.0.1"

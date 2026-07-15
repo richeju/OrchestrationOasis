@@ -1,0 +1,42 @@
+---
+- name: Render NetBox service assets
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    netbox_dir: "{{ output_dir }}"
+    netbox_version: "v4.4.3"
+    netbox_port: 8000
+    netbox_zerotier_ip: 10.78.0.1
+    netbox_db_password: test-database-password
+    netbox_redis_password: test-redis-password
+    netbox_secret_key: test-secret-key-that-is-longer-than-fifty-characters-123456
+    netbox_allowed_hosts: "10.78.0.1"
+    netbox_db_name: netbox
+    netbox_db_user: netbox
+  tasks:
+    - name: Render NetBox Compose
+      ansible.builtin.template:
+        src: "{{ repo_root }}/ansible/playbooks/roles/netbox/templates/docker-compose.yml.j2"
+        dest: "{{ output_dir }}/compose.yml"
+        mode: '0600'
+    - name: Render NetBox configuration
+      ansible.builtin.template:
+        src: "{{ repo_root }}/ansible/playbooks/roles/netbox/templates/configuration.py.j2"
+        dest: "{{ output_dir }}/configuration.py"
+        mode: '0600'
+    - name: Render NetBox environment
+      ansible.builtin.template:
+        src: "{{ repo_root }}/ansible/playbooks/roles/netbox/templates/netbox.env.j2"
+        dest: "{{ output_dir }}/netbox.env"
+        mode: '0600'
+    - name: Render PostgreSQL environment
+      ansible.builtin.template:
+        src: "{{ repo_root }}/ansible/playbooks/roles/netbox/templates/postgres.env.j2"
+        dest: "{{ output_dir }}/postgres.env"
+        mode: '0600'
+    - name: Render Redis environment
+      ansible.builtin.template:
+        src: "{{ repo_root }}/ansible/playbooks/roles/netbox/templates/redis.env.j2"
+        dest: "{{ output_dir }}/redis.env"
+        mode: '0600'

@@ -35,3 +35,5 @@ all:
       hosts: {}
     yubikey:
       hosts: {}
+    infraforge_vps:
+      hosts: {}

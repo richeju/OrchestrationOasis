@@ -1,10 +1,19 @@
 ---
+- name: Require explicit approval for the compact NetBox stack
+  ansible.builtin.assert:
+    that:
+      - netbox_compact_stack_confirmed | bool
+    fail_msg: >-
+      This role deploys the legacy compact NetBox stack and does not match the
+      official netbox-docker production deployment. Set
+      netbox_compact_stack_confirmed=true only for a reviewed new installation.
+
 - name: Validate NetBox secrets
   ansible.builtin.assert:
     that:
       - netbox_db_password | length >= 16
       - netbox_redis_password | length >= 16
-      - netbox_secret_key | length >= 32
+      - netbox_secret_key | length >= 50
     fail_msg: >-
       Configure strong NetBox secrets through Ansible Vault or the
       NETBOX_DB_PASSWORD, NETBOX_REDIS_PASSWORD and NETBOX_SECRET_KEY
@@ -38,6 +47,7 @@
   loop:
     - {src: 'netbox.env.j2', dest: 'netbox.env'}
     - {src: 'postgres.env.j2', dest: 'postgres.env'}
+    - {src: 'redis.env.j2', dest: 'redis.env'}
   loop_control:
     label: "{{ item.dest }}"
   no_log: true

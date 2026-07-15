@@ -1,0 +1,10 @@
+---
+- name: Exercise YubiKey third-party-only safety guard
+  hosts: localhost
+  gather_facts: false
+  vars:
+    ansible_user: debian
+    yubikey_mappings:
+      - operator:credential-data
+  roles:
+    - yubikey

@@ -33,13 +33,16 @@ group explicitly.
 | `linux` | Debian target and passwordless non-interactive sudo |
 | `docker` | `linux` host; installs the Docker Engine |
 | `ufw` | Console or recovery access before changing firewall policy |
-| `dashboard`, `netbox` | Docker and an existing `zt*` ZeroTier interface |
+| `dashboard` | Docker and an existing `zt*` ZeroTier interface |
+| `netbox` | Legacy compact stack only; explicit confirmation required; not the live official stack |
 | `bind_dns` | Docker, ZeroTier, reachable NetBox API, API endpoint and token |
-| `prometheus`, `zerotier` | Docker |
+| `prometheus` | Docker and an explicit loopback/private bind address |
+| `zerotier` | Docker |
 | `restic` | Root-only rclone config, repository password file, explicit source paths |
 | `pcloud` | Valid rclone pCloud token |
 | `openbao` | Docker and TLS CA/certificate/key already provisioned or supplied |
 | `yubikey` | At least one tested U2F mapping and an out-of-band recovery session |
+| `infraforge_vps` | Read-only audit target; no deployment role |
 
 Membership in a service group does not automatically add the host to every
 prerequisite group. BIND includes the Docker role itself, but it still requires
@@ -98,6 +101,11 @@ The deploy workflow defaults to check mode. Check and apply are separate runs:
 record the commit SHA shown by GitHub and confirm it has not changed before
 applying. Mutable container tags can also change between runs; see
 [technical debt](technical-debt.md).
+
+The deploy job is skipped unless the workflow runs from `main`. Keep the
+`production` environment protected by independent required reviewers because
+repository code alone cannot protect secrets from a maintainer who can modify a
+workflow on an arbitrary branch.
 
 ## Maintenance
 

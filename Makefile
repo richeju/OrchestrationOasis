@@ -1,8 +1,9 @@
-.PHONY: help install lint syntax test check scan
+.PHONY: help install lint workflows syntax test check scan
 
 help:
 	@echo "install  Install Python and Ansible dependencies"
 	@echo "lint     Run YAML and Ansible linters"
+	@echo "workflows Validate GitHub Actions workflows"
 	@echo "syntax   Check the complete playbook syntax"
 	@echo "test     Run local regression tests"
 	@echo "check    Run lint, syntax, and tests"
@@ -15,16 +16,21 @@ install:
 lint:
 	./scripts/run-lint.sh ansible
 
+workflows:
+	./scripts/run-actionlint.sh
+
 syntax:
 	ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook --syntax-check ansible/site.yml
 
 test:
 	./scripts/tests/run-lint.test.sh
 	./scripts/tests/safety-gates.test.sh
+	./scripts/tests/repository-safety.test.sh
+	./scripts/tests/service-roles.test.sh
 	./scripts/tests/restic-role.test.sh
 	./scripts/tests/semaphore-role.test.sh
 
-check: lint syntax test
+check: lint workflows syntax test
 
 scan:
 	docker run --rm -v $$PWD:/project:ro -v $$PWD/.trivy-cache:/root/.cache/ \

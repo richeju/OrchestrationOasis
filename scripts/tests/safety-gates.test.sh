@@ -3,6 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 roles_path="$repo_root/ansible/playbooks/roles"
+localhost_inventory="$repo_root/scripts/tests/fixtures/localhost-inventory.yml"
 
 expect_safe_failure() {
   local playbook=$1
@@ -12,7 +13,7 @@ expect_safe_failure() {
 
   set +e
   output=$(ANSIBLE_ROLES_PATH="$roles_path" ansible-playbook \
-    --inventory localhost, --connection local "$playbook" --check 2>&1)
+    --inventory "$localhost_inventory" "$playbook" --check 2>&1)
   status=$?
   set -e
 
@@ -30,6 +31,18 @@ expect_safe_failure() {
 expect_safe_failure \
   "$repo_root/scripts/tests/fixtures/yubikey-safety.yml" \
   'Refusing to change SSH authentication'
+expect_safe_failure \
+  "$repo_root/scripts/tests/fixtures/yubikey-third-party-safety.yml" \
+  'active administration user debian must have an enrolled YubiKey'
+expect_safe_failure \
+  "$repo_root/scripts/tests/fixtures/netbox-secret-safety.yml" \
+  'Configure strong NetBox secrets'
+expect_safe_failure \
+  "$repo_root/scripts/tests/fixtures/prometheus-bind-safety.yml" \
+  'Wildcard publication is refused'
+expect_safe_failure \
+  "$repo_root/scripts/tests/fixtures/prometheus-invalid-bind-safety.yml" \
+  'explicit private IPv4 address'
 expect_safe_failure \
   "$repo_root/scripts/tests/fixtures/bind-safety.yml" \
   'BIND requires bind_dns_netbox_url and bind_dns_netbox_token'
