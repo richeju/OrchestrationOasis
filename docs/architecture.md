@@ -38,6 +38,13 @@ reachable through a trusted administration network.
 Windows hosts remain outside `site.yml` and use the dedicated Chocolatey
 playbooks.
 
+## Execution control plane
+
+GitHub is the source of versioned automation. Semaphore checks out this
+repository and provides inventories, templates, schedules, and run logs. AWX is
+not part of the current architecture because it would duplicate Semaphore's
+orchestration role. See [Semaphore operations](semaphore.md).
+
 ## Safe evolution
 
 Add a new service by creating a role, a focused playbook, an inventory group,

@@ -92,5 +92,6 @@ Further reading:
 - [pCloud operations](docs/pcloud.md)
 - [Restic backup and restore](docs/restic.md)
 - [OpenBao operations](docs/openbao.md)
+- [Semaphore operations](docs/semaphore.md)
 - [Security notes](README.security.md)
 - [Known technical debt](docs/technical-debt.md)
