@@ -2,12 +2,13 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+localhost_inventory="$repo_root/scripts/tests/fixtures/localhost-inventory.yml"
 export ANSIBLE_ROLES_PATH="$repo_root/ansible/playbooks/roles"
 output_dir=$(mktemp -d)
 trap 'rm -rf "$output_dir"' EXIT
 
 ansible-playbook \
-  --inventory localhost, \
+  --inventory "$localhost_inventory" \
   --extra-vars "test_output_dir=$output_dir" \
   "$repo_root/scripts/tests/fixtures/render-restic.yml" >/dev/null
 
@@ -32,18 +33,18 @@ printf 'original-password-file-content\n' >"$output_dir/existing.pass"
 chmod 0600 "$output_dir/existing.pass"
 
 ansible-playbook \
-  --inventory localhost, \
+  --inventory "$localhost_inventory" \
   --extra-vars "test_output_dir=$output_dir" \
   --check \
   "$repo_root/scripts/tests/fixtures/test-restic-password.yml" >/dev/null
 
 ansible-playbook \
-  --inventory localhost, \
+  --inventory "$localhost_inventory" \
   --extra-vars "test_output_dir=$output_dir" \
   "$repo_root/scripts/tests/fixtures/test-restic-password.yml" >/dev/null
 
 ansible-playbook \
-  --inventory localhost, \
+  --inventory "$localhost_inventory" \
   "$repo_root/scripts/tests/fixtures/test-restic-validation.yml" >/dev/null
 
 bash -n "$output_dir/restic-backup.sh"

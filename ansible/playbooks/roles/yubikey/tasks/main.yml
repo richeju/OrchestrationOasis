@@ -1,11 +1,27 @@
 ---
-- name: Refuse to enable SSH MFA without enrolled YubiKeys
+- name: Determine users enrolled for SSH MFA
+  ansible.builtin.set_fact:
+    yubikey_enrolled_users: >-
+      {{ yubikey_mappings
+         | map('regex_replace', ':.*$', '')
+         | list }}
+    yubikey_effective_admin_user: >-
+      {{ yubikey_admin_user | default(ansible_user | default(''), true) }}
+  changed_when: false
+
+- name: Refuse to enable SSH MFA without the administration user
   ansible.builtin.assert:
     that:
       - yubikey_mappings | length > 0
+      - yubikey_mappings | select('match', '^[A-Za-z_][A-Za-z0-9_-]*:.+') | list | length == yubikey_mappings | length
+      - yubikey_effective_admin_user | length > 0
+      - yubikey_effective_admin_user in yubikey_enrolled_users
     fail_msg: >-
-      yubikey_mappings is empty. Refusing to change SSH authentication because
-      this would lock every user out of the host.
+      Refusing to change SSH authentication. Every mapping must use
+      username:credential format and the active administration user
+      {{ yubikey_effective_admin_user | default('the administration user', true) }}
+      must have an enrolled YubiKey. Set yubikey_admin_user explicitly when
+      ansible_user is not defined.
 
 - name: Install YubiKey dependencies
   ansible.builtin.apt:

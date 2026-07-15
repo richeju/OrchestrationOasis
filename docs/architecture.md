@@ -10,9 +10,10 @@ Orchestration Oasis separates configuration from infrastructure identity:
 - inventories decide which services a host receives;
 - runtime environment variables or Ansible Vault provide secrets.
 
-The repository's default inventory is deliberately local and exists only for
+The repository's default inventory is deliberately empty and exists only for
 discovery, linting, and syntax checks. Production deployments always require an
-explicit inventory.
+explicit inventory, so an unqualified `ansible-playbook site.yml` targets zero
+hosts.
 
 ## Execution flow
 
@@ -34,6 +35,8 @@ Linux baseline hosts belong to `linux`. Service groups correspond to tags in
 `prometheus`, `netbox`, `semaphore`, `bind_dns`, and `yubikey`.
 `openbao` is the private secrets-service group and should only target hosts
 reachable through a trusted administration network.
+`infraforge_vps` is reserved for the read-only production audit and carries its
+non-secret probe topology through playbook-relative group variables.
 
 Windows hosts remain outside `site.yml` and use the dedicated Chocolatey
 playbooks.
@@ -44,6 +47,10 @@ GitHub is the source of versioned automation. Semaphore checks out this
 repository and provides inventories, templates, schedules, and run logs. AWX is
 not part of the current architecture because it would duplicate Semaphore's
 orchestration role. See [Semaphore operations](semaphore.md).
+
+The authoritative boundary between managed and merely observed services is the
+[current infrastructure state](current-state.md). A role present in the tree is
+not sufficient evidence that it owns the corresponding live service.
 
 ## Safe evolution
 

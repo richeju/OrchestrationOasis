@@ -1,20 +1,28 @@
 ---
 - name: Audit the Infraforge VPS without changing it
-  hosts: linux
+  hosts: infraforge_vps
   gather_facts: false
   become: true
   tasks:
+    - name: Validate the versioned audit topology
+      ansible.builtin.assert:
+        that:
+          - infraforge_audit_required_services | length > 0
+          - infraforge_audit_http_services | length > 0
+          - infraforge_audit_openbao_url | length > 0
+          - infraforge_audit_openbao_ca_path | length > 0
+          - infraforge_audit_restic_script | length > 0
+
     - name: Collect systemd service facts
       ansible.builtin.service_facts:
 
     - name: Require core administration services
       ansible.builtin.assert:
         that:
+          - item in ansible_facts.services
           - ansible_facts.services[item].state == 'running'
-        fail_msg: "Required service {{ item }} is not running"
-      loop:
-        - docker.service
-        - openvpn-hermes-ovh.service
+        fail_msg: "Required service {{ item }} is absent or not running"
+      loop: "{{ infraforge_audit_required_services }}"
 
     - name: List failed systemd units
       ansible.builtin.command:
@@ -24,6 +32,7 @@
           - --no-legend
           - --plain
       register: failed_units
+      check_mode: false
       changed_when: false
 
     - name: Require no failed systemd units
@@ -38,26 +47,19 @@
         method: GET
         status_code: "{{ item.status_codes }}"
         follow_redirects: none
-      loop:
-        - name: NetBox
-          url: http://10.78.0.1:8000/login/
-          status_codes: [200]
-        - name: Authentik
-          url: http://10.78.0.1:9000/
-          status_codes: [200, 302]
-        - name: Semaphore
-          url: http://10.78.0.1:3001/
-          status_codes: [200]
+      check_mode: false
+      loop: "{{ infraforge_audit_http_services }}"
       loop_control:
         label: "{{ item.name }}"
 
     - name: Probe OpenBao through trusted TLS
       ansible.builtin.uri:
-        url: https://10.78.0.1:8200/v1/sys/health
+        url: "{{ infraforge_audit_openbao_url }}"
         method: GET
-        ca_path: /home/debian/openbao/tls/ca.crt
-        status_code: [200, 429, 472, 473, 501, 503]
+        ca_path: "{{ infraforge_audit_openbao_ca_path }}"
+        status_code: "{{ infraforge_audit_openbao_status_codes }}"
         return_content: true
+      check_mode: false
       register: openbao_health
 
     - name: Require OpenBao to be initialized and unsealed
@@ -68,8 +70,11 @@
         fail_msg: OpenBao is not initialized and unsealed
 
     - name: Run the Restic backup audit
-      ansible.builtin.command: /usr/local/sbin/infraforge-backup-audit.sh
+      ansible.builtin.command:
+        argv:
+          - "{{ infraforge_audit_restic_script }}"
       register: restic_audit_raw
+      check_mode: false
       changed_when: false
 
     - name: Parse the Restic audit

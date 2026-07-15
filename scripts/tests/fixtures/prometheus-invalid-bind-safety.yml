@@ -1,0 +1,8 @@
+---
+- name: Exercise Prometheus malformed-private-address guard
+  hosts: localhost
+  gather_facts: false
+  vars:
+    prometheus_bind_address: 10.not-an-ip
+  roles:
+    - prometheus

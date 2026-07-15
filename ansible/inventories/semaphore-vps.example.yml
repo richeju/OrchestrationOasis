@@ -2,6 +2,9 @@
 all:
   children:
     linux:
+      children:
+        infraforge_vps: {}
+    infraforge_vps:
       hosts:
         infraforge-vps:
           ansible_connection: ssh

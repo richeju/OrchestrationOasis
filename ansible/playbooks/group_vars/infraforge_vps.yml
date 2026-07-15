@@ -1,0 +1,21 @@
+---
+# Non-secret live topology used by the read-only Infraforge VPS audit.
+infraforge_audit_required_services:
+  - docker.service
+  - openvpn-hermes-ovh.service
+
+infraforge_audit_http_services:
+  - name: NetBox
+    url: http://10.78.0.1:8000/login/
+    status_codes: [200]
+  - name: Authentik
+    url: http://10.78.0.1:9000/
+    status_codes: [200, 302]
+  - name: Semaphore
+    url: http://10.78.0.1:3001/
+    status_codes: [200]
+
+infraforge_audit_openbao_url: https://10.78.0.1:8200/v1/sys/health
+infraforge_audit_openbao_ca_path: /home/debian/openbao/tls/ca.crt
+infraforge_audit_openbao_status_codes: [200, 429, 472, 473, 501, 503]
+infraforge_audit_restic_script: /usr/local/sbin/infraforge-backup-audit.sh

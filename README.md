@@ -10,16 +10,18 @@ credential belongs in Git.
 
 ## Managed services
 
-The complete Linux playbook can manage system updates, Docker, UFW, ZeroTier,
-pCloud through rclone, Dashy, encrypted Restic backups, Prometheus, NetBox,
-BIND, OpenBao, and YubiKey SSH authentication. A host receives only the roles
-represented by its inventory groups.
+The complete Linux playbook contains roles for system updates, Docker, UFW,
+ZeroTier, pCloud through rclone, Dashy, encrypted Restic backups, Prometheus,
+NetBox, BIND, OpenBao, Semaphore, and YubiKey SSH authentication. A role is not
+necessarily enabled or authoritative for the current production service. Read
+the [current infrastructure state](docs/current-state.md) before deployment.
 
 ## Quick start
 
 Requirements: Git, Python 3.12 or newer with `venv`, GNU Make, an SSH
 identity, and a Debian target reachable through SSH with non-interactive sudo.
-Docker is required locally only for the Trivy security scan.
+Docker Engine with Compose v2 is required for `make check` template validation
+and for the Trivy security scan.
 
 ```bash
 python3 -m venv .venv
@@ -88,6 +90,7 @@ docs/                         architecture and operations
 Further reading:
 
 - [Architecture](docs/architecture.md)
+- [Current infrastructure state](docs/current-state.md)
 - [Deployment and GitHub Actions](docs/deployment.md)
 - [pCloud operations](docs/pcloud.md)
 - [Restic backup and restore](docs/restic.md)
