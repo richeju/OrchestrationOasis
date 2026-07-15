@@ -12,8 +12,6 @@ source {{ restic_environment_file | quote }}
 set +a
 
 export LC_ALL=C.UTF-8
-export RESTIC_CACHE_DIR=${RESTIC_CACHE_DIR:-{{ restic_cache_dir | quote }}}
-mkdir -p "$RESTIC_CACHE_DIR"
 
 python3 - <<'PY'
 import datetime
@@ -49,7 +47,7 @@ service = systemd_properties(
      "ExecMainStatus", "ActiveState", "SubState"],
 )
 timer = systemd_properties(TIMER, ["NextElapseUSecRealtime", "LastTriggerUSec"])
-snapshots = json.loads(run_ok(["restic", "snapshots", "--json"]))
+snapshots = json.loads(run_ok(["restic", "--no-cache", "snapshots", "--json"]))
 latest = snapshots[-1] if snapshots else None
 latest_time = latest["time"] if latest else None
 age_hours = None
@@ -60,7 +58,11 @@ if latest_time:
         2,
     )
 
-lock_ids = [item for item in run_ok(["restic", "list", "locks"]).splitlines() if item]
+lock_ids = [
+    item
+    for item in run_ok(["restic", "--no-cache", "list", "locks"]).splitlines()
+    if item
+]
 status = "ok"
 reasons = []
 if service.get("Result") != "success" or service.get("ExecMainStatus") not in ("0", ""):

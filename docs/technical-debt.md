@@ -37,6 +37,9 @@ the `DOCKER-USER` chain.
   verify that real NetBox custom fields map to the groups used by `site.yml`.
 - OpenBao audit-log rotation uses `copytruncate`; evaluate signal-based rotation
   if the deployed image and ownership model support reliable reopen semantics.
+- Semaphore is installed and backed by local SQLite, but its package, systemd
+  unit, configuration, and project metadata are not yet provisioned by an
+  Ansible role. Keep root-only credentials and the live database out of Git.
 - Python direct dependencies are pinned, but transitive dependencies and hashes
   are not locked.
 

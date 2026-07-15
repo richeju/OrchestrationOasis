@@ -1,0 +1,94 @@
+---
+- name: Audit the Infraforge VPS without changing it
+  hosts: linux
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Collect systemd service facts
+      ansible.builtin.service_facts:
+
+    - name: Require core administration services
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services[item].state == 'running'
+        fail_msg: "Required service {{ item }} is not running"
+      loop:
+        - docker.service
+        - openvpn-hermes-ovh.service
+        - semaphore.service
+
+    - name: List failed systemd units
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - --failed
+          - --no-legend
+          - --plain
+      register: failed_units
+      changed_when: false
+
+    - name: Require no failed systemd units
+      ansible.builtin.assert:
+        that:
+          - failed_units.stdout | trim | length == 0
+        fail_msg: "Failed systemd units detected: {{ failed_units.stdout | trim }}"
+
+    - name: Probe private HTTP services
+      ansible.builtin.uri:
+        url: "{{ item.url }}"
+        method: GET
+        status_code: "{{ item.status_codes }}"
+        follow_redirects: none
+      loop:
+        - name: NetBox
+          url: http://10.78.0.1:8000/login/
+          status_codes: [200]
+        - name: Authentik
+          url: http://10.78.0.1:9000/
+          status_codes: [200, 302]
+        - name: Semaphore
+          url: http://10.78.0.1:3001/
+          status_codes: [200]
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Probe OpenBao through trusted TLS
+      ansible.builtin.uri:
+        url: https://10.78.0.1:8200/v1/sys/health
+        method: GET
+        ca_path: /home/debian/openbao/tls/ca.crt
+        status_code: [200, 429, 472, 473, 501, 503]
+        return_content: true
+      register: openbao_health
+
+    - name: Require OpenBao to be initialized and unsealed
+      ansible.builtin.assert:
+        that:
+          - openbao_health.json.initialized | bool
+          - not (openbao_health.json.sealed | bool)
+        fail_msg: OpenBao is not initialized and unsealed
+
+    - name: Run the Restic backup audit
+      ansible.builtin.command: /usr/local/sbin/infraforge-backup-audit.sh
+      register: restic_audit_raw
+      changed_when: false
+
+    - name: Parse the Restic audit
+      ansible.builtin.set_fact:
+        restic_audit: "{{ restic_audit_raw.stdout | from_json }}"
+
+    - name: Require a healthy Restic repository
+      ansible.builtin.assert:
+        that:
+          - restic_audit.status == 'ok'
+          - restic_audit.locks | length == 0
+        fail_msg: Restic audit reported an unhealthy repository or active locks
+
+    - name: Report the read-only audit summary
+      ansible.builtin.debug:
+        msg:
+          - "Systemd failed units: 0"
+          - "OpenBao initialized/unsealed: true/true"
+          - "Restic status: {{ restic_audit.status }}"
+          - "Restic snapshots: {{ restic_audit.snapshot_count }}"
+          - "Restic locks: {{ restic_audit.locks | length }}"
