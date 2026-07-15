@@ -21,6 +21,7 @@ name: Deploy
           - prometheus
           - netbox
           - openbao
+          - semaphore
           - bind_dns
           - yubikey
       check:

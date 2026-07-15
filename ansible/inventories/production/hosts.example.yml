@@ -29,6 +29,8 @@ all:
       hosts: {}
     openbao:
       hosts: {}
+    semaphore:
+      hosts: {}
     bind_dns:
       hosts: {}
     yubikey:

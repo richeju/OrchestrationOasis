@@ -1,0 +1,45 @@
+---
+- name: Validate Semaphore security and migration settings
+  ansible.builtin.assert:
+    that:
+      - semaphore_image is search('@sha256:[0-9a-f]{64}$')
+      - semaphore_bind_address not in ['0.0.0.0', '::', '']
+      - semaphore_bind_address is match('^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)')
+      - semaphore_host_port | int > 0
+      - semaphore_host_port | int < 65536
+      - semaphore_container_port | int > 0
+      - semaphore_container_port | int < 65536
+      - semaphore_runner_ssh_host is match('^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)')
+      - semaphore_network_subnet is match('^172\.30\.0\.0/24$')
+      - semaphore_runner_source_cidr == semaphore_network_subnet
+      - semaphore_container_uid | int != 0
+      - semaphore_runner_ssh_user == 'debian'
+      - semaphore_native_uid == '1000'
+      - semaphore_native_gid == '1000'
+      - semaphore_authorized_keys_path == '/home/debian/.ssh/authorized_keys'
+      - semaphore_state_dir != '/'
+      - semaphore_dir != '/'
+    fail_msg: >-
+      Pin Semaphore by digest, use private addresses and a dedicated Docker
+      subnet, and never run the container as root.
+
+- name: Inspect the existing Semaphore configuration
+  ansible.builtin.stat:
+    path: "{{ semaphore_legacy_config_path }}"
+  register: semaphore_legacy_config
+
+- name: Inspect the existing Semaphore SQLite database
+  ansible.builtin.stat:
+    path: "{{ semaphore_database_path }}"
+  register: semaphore_database
+
+- name: Require the existing state for an in-place migration
+  ansible.builtin.assert:
+    that:
+      - semaphore_legacy_config.stat.exists
+      - semaphore_legacy_config.stat.isreg
+      - semaphore_database.stat.exists
+      - semaphore_database.stat.isreg
+    fail_msg: >-
+      This role migrates the existing Semaphore instance. Both its config JSON
+      and SQLite database must exist before runtime migration is enabled.

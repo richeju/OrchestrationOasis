@@ -1,0 +1,55 @@
+---
+services:
+  semaphore:
+    image: {{ semaphore_image | quote }}
+    container_name: semaphore
+    restart: unless-stopped
+    read_only: true
+    command:
+      - /usr/local/bin/semaphore
+      - server
+      - --config
+      - /etc/semaphore/config.json
+    environment:
+      HOME: /var/lib/semaphore
+      TMPDIR: /tmp/semaphore
+      PYTHONDONTWRITEBYTECODE: "1"
+      ANSIBLE_LOCAL_TEMP: /tmp/semaphore/.ansible/tmp
+      ANSIBLE_HOST_KEY_CHECKING: "True"
+    ports:
+      - "{{ semaphore_bind_address }}:{{ semaphore_host_port }}:{{ semaphore_container_port }}"
+    volumes:
+      - {{ semaphore_state_dir }}:/var/lib/semaphore
+      - {{ semaphore_tmp_dir }}:/tmp/semaphore
+      - {{ semaphore_config_path }}:/etc/semaphore/config.json:ro
+      - {{ semaphore_runner_private_key_path }}:{{ semaphore_runner_container_key_path }}:ro
+      - {{ semaphore_runner_known_hosts_path }}:{{ semaphore_runner_container_known_hosts_path }}:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - --fail
+        - --silent
+        - http://127.0.0.1:{{ semaphore_container_port }}/
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - semaphore
+
+networks:
+  semaphore:
+    name: {{ semaphore_network_name }}
+    ipam:
+      config:
+        - subnet: {{ semaphore_network_subnet }}

@@ -1,0 +1,248 @@
+---
+- name: Inspect the stable Docker migration marker
+  ansible.builtin.stat:
+    path: "{{ semaphore_migration_marker_path }}"
+  register: semaphore_migration_marker
+
+- name: Inspect the legacy versioned migration marker
+  ansible.builtin.stat:
+    path: "{{ semaphore_dir }}/.docker-migrated-{{ semaphore_version }}"
+  register: semaphore_legacy_migration_marker
+  when: not semaphore_migration_marker.stat.exists
+
+- name: Adopt the legacy migration marker
+  ansible.builtin.copy:
+    content: "Semaphore native-to-Docker migration already completed.\n"
+    dest: "{{ semaphore_migration_marker_path }}"
+    owner: root
+    group: root
+    mode: '0600'
+  when:
+    - not semaphore_migration_marker.stat.exists
+    - semaphore_legacy_migration_marker.stat.exists | default(false)
+
+- name: Refresh the stable Docker migration marker
+  ansible.builtin.stat:
+    path: "{{ semaphore_migration_marker_path }}"
+  register: semaphore_migration_marker
+
+- name: Initialize migration phase tracking
+  ansible.builtin.set_fact:
+    semaphore_initial_native_migration: >-
+      {{ not semaphore_migration_marker.stat.exists }}
+    semaphore_backup_validated: false
+    semaphore_live_state_reassigned: false
+
+- name: Migrate Semaphore to Docker with guarded native rollback
+  block:
+    - name: Stop the native Semaphore service for a consistent SQLite backup
+      ansible.builtin.systemd_service:
+        name: "{{ semaphore_native_unit }}"
+        state: stopped
+      when: semaphore_initial_native_migration | bool
+
+    - name: Remove a stale candidate backup from an earlier failed attempt
+      ansible.builtin.file:
+        path: "{{ semaphore_backup_path }}.candidate"
+        state: absent
+      when: semaphore_initial_native_migration | bool
+
+    - name: Create a fresh transactionally consistent SQLite candidate backup
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - >-
+            import sqlite3,sys;
+            source=sqlite3.connect(sys.argv[1]);
+            target=sqlite3.connect(sys.argv[2]);
+            source.backup(target);
+            target.close();
+            source.close()
+          - "{{ semaphore_database_path }}"
+          - "{{ semaphore_backup_path }}.candidate"
+      when: semaphore_initial_native_migration | bool
+
+    - name: Protect the candidate SQLite backup
+      ansible.builtin.file:
+        path: "{{ semaphore_backup_path }}.candidate"
+        owner: root
+        group: root
+        mode: '0600'
+      when: semaphore_initial_native_migration | bool
+
+    - name: Validate the candidate SQLite backup
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - >-
+            import sqlite3,sys;
+            print(sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True)
+            .execute('PRAGMA integrity_check').fetchone()[0])
+          - "{{ semaphore_backup_path }}.candidate"
+      register: semaphore_candidate_integrity
+      changed_when: false
+      failed_when: semaphore_candidate_integrity.stdout | trim != 'ok'
+      when: semaphore_initial_native_migration | bool
+
+    - name: Promote the validated SQLite backup atomically
+      ansible.builtin.command:
+        argv:
+          - mv
+          - -f
+          - "{{ semaphore_backup_path }}.candidate"
+          - "{{ semaphore_backup_path }}"
+      when: semaphore_initial_native_migration | bool
+
+    - name: Record the validated backup phase
+      ansible.builtin.set_fact:
+        semaphore_backup_validated: true
+      when: semaphore_initial_native_migration | bool
+
+    - name: Record that live state reassignment is starting
+      ansible.builtin.set_fact:
+        semaphore_live_state_reassigned: true
+      when: semaphore_initial_native_migration | bool
+
+    - name: Assign the Semaphore state to the container user
+      ansible.builtin.file:
+        path: "{{ semaphore_state_dir }}"
+        state: directory
+        owner: "{{ semaphore_container_uid }}"
+        group: "{{ semaphore_container_gid }}"
+        recurse: true
+
+    - name: Protect the live SQLite database
+      ansible.builtin.file:
+        path: "{{ semaphore_database_path }}"
+        owner: "{{ semaphore_container_uid }}"
+        group: "{{ semaphore_container_gid }}"
+        mode: '0600'
+
+    - name: Launch the Semaphore Compose stack
+      community.docker.docker_compose_v2:
+        project_src: "{{ semaphore_dir }}"
+        files:
+          - "{{ semaphore_compose_path | basename }}"
+        state: present
+        pull: missing
+      register: semaphore_compose
+
+    - name: Wait for Semaphore through the VPN-only listener
+      ansible.builtin.uri:
+        url: "{{ semaphore_web_host }}/"
+        method: GET
+        status_code: 200
+      register: semaphore_health
+      retries: "{{ semaphore_health_retries }}"
+      delay: "{{ semaphore_health_delay }}"
+      until: semaphore_health.status == 200
+
+    - name: Disable the superseded native Semaphore service
+      ansible.builtin.systemd_service:
+        name: "{{ semaphore_native_unit }}"
+        state: stopped
+        enabled: false
+
+    - name: Record successful native-to-Docker migration
+      ansible.builtin.copy:
+        content: "Semaphore {{ semaphore_version }} migrated from systemd to Docker.\n"
+        dest: "{{ semaphore_migration_marker_path }}"
+        owner: root
+        group: root
+        mode: '0600'
+      when: semaphore_initial_native_migration | bool
+
+  rescue:
+    - name: Stop the failed Semaphore Compose stack before rollback
+      community.docker.docker_compose_v2:
+        project_src: "{{ semaphore_dir }}"
+        files:
+          - "{{ semaphore_compose_path | basename }}"
+        state: absent
+
+    - name: Verify that the Semaphore container is no longer running
+      ansible.builtin.command:
+        argv:
+          - docker
+          - inspect
+          - --format={{ '{{' }}.State.Running{{ '}}' }}
+          - semaphore
+      register: semaphore_failed_container
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse native rollback while the container is running
+      ansible.builtin.assert:
+        that:
+          - >-
+            semaphore_failed_container.rc != 0 or
+            semaphore_failed_container.stdout | trim != 'true'
+        fail_msg: >-
+          The failed Semaphore container is still running. Native ownership and
+          systemd were not restored to protect the shared SQLite database.
+
+    - name: Inspect the native Semaphore service before rollback
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - "{{ semaphore_native_unit }}"
+      register: semaphore_native_active_after_failure
+      changed_when: false
+      failed_when: false
+      when: semaphore_initial_native_migration | bool
+
+    - name: Inspect Semaphore state ownership before native rollback
+      ansible.builtin.stat:
+        path: "{{ semaphore_state_dir }}"
+      register: semaphore_state_after_failure
+      when: semaphore_initial_native_migration | bool
+
+    - name: Restore this attempt's validated cold SQLite backup
+      ansible.builtin.copy:
+        src: "{{ semaphore_backup_path }}"
+        dest: "{{ semaphore_database_path }}"
+        remote_src: true
+        force: true
+        owner: "{{ semaphore_native_uid }}"
+        group: "{{ semaphore_native_gid }}"
+        mode: '0600'
+      when:
+        - semaphore_initial_native_migration | bool
+        - semaphore_backup_validated | bool
+        - semaphore_live_state_reassigned | bool
+        - semaphore_native_active_after_failure.stdout | trim != 'active'
+
+    - name: Return Semaphore state to the native user
+      ansible.builtin.file:
+        path: "{{ semaphore_state_dir }}"
+        state: directory
+        owner: "{{ semaphore_native_uid }}"
+        group: "{{ semaphore_native_gid }}"
+        recurse: true
+      when:
+        - semaphore_initial_native_migration | bool
+        - semaphore_native_active_after_failure.stdout | trim != 'active'
+        - >-
+          semaphore_live_state_reassigned | bool or
+          (semaphore_state_after_failure.stat.uid | string) !=
+          (semaphore_native_uid | string)
+
+    - name: Restore the native Semaphore service
+      ansible.builtin.systemd_service:
+        name: "{{ semaphore_native_unit }}"
+        state: started
+        enabled: true
+      when:
+        - semaphore_initial_native_migration | bool
+        - semaphore_native_active_after_failure.stdout | trim != 'active'
+
+    - name: Stop after the failed Docker operation
+      ansible.builtin.fail:
+        msg: >-
+          Semaphore Docker validation failed. The container was stopped.
+          {{ 'The current attempt was rolled back safely to the native service.'
+             if semaphore_initial_native_migration else
+             'This was not an initial migration, so the native service was not restarted.' }}

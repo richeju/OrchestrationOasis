@@ -1,0 +1,13 @@
+---
+- name: Validate Semaphore migration inputs
+  ansible.builtin.import_tasks: validate.yml
+
+- name: Prepare Semaphore Docker assets
+  ansible.builtin.import_tasks: prepare.yml
+  when: not ansible_check_mode
+
+- name: Run Semaphore Docker migration
+  ansible.builtin.import_tasks: runtime.yml
+  when:
+    - semaphore_manage_runtime | bool
+    - not ansible_check_mode

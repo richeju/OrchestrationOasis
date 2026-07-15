@@ -1,0 +1,139 @@
+---
+- name: Create Semaphore deployment directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ semaphore_dir }}"
+      owner: root
+      group: root
+      mode: '0755'
+    - path: "{{ semaphore_config_dir }}"
+      owner: root
+      group: root
+      mode: '0700'
+    - path: "{{ semaphore_tmp_dir }}"
+      owner: "{{ semaphore_container_uid }}"
+      group: "{{ semaphore_container_gid }}"
+      mode: '0700'
+    - path: "{{ semaphore_runner_dir }}"
+      owner: "{{ semaphore_container_uid }}"
+      group: "{{ semaphore_container_gid }}"
+      mode: '0700'
+    - path: "{{ semaphore_backup_dir }}"
+      owner: root
+      group: root
+      mode: '0700'
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Read the existing Semaphore configuration
+  ansible.builtin.slurp:
+    src: "{{ semaphore_legacy_config_path }}"
+  register: semaphore_config_source
+  no_log: true
+
+- name: Build the container-specific Semaphore configuration
+  ansible.builtin.set_fact:
+    semaphore_container_config: >-
+      {{
+        (semaphore_config_source.content | b64decode | from_json)
+        | combine(
+            {
+              'sqlite': {'host': '/var/lib/semaphore/semaphore.db'},
+              'dialect': 'sqlite',
+              'tmp_path': '/tmp/semaphore',
+              'interface': '0.0.0.0',
+              'port': ':' ~ (semaphore_container_port | string),
+              'web_host': semaphore_web_host,
+              'dirs': {
+                'repos': '/var/lib/semaphore/repos',
+                'secrets': '/var/lib/semaphore/secrets',
+                'ssh_agent_sockets': '/var/lib/semaphore/ssh-agent'
+              }
+            },
+            recursive=True
+          )
+      }}
+  no_log: true
+
+- name: Install the container Semaphore configuration
+  ansible.builtin.copy:
+    content: "{{ semaphore_container_config | to_nice_json }}\n"
+    dest: "{{ semaphore_config_path }}"
+    owner: "{{ semaphore_container_uid }}"
+    group: "{{ semaphore_container_gid }}"
+    mode: '0600'
+  no_log: true
+
+- name: Generate the dedicated Semaphore runner key
+  ansible.builtin.command:
+    argv:
+      - ssh-keygen
+      - -q
+      - -t
+      - ed25519
+      - -N
+      - ''
+      - -C
+      - semaphore-docker-runner
+      - -f
+      - "{{ semaphore_runner_private_key_path }}"
+    creates: "{{ semaphore_runner_private_key_path }}"
+
+- name: Protect the Semaphore runner key pair
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: "{{ semaphore_container_uid }}"
+    group: "{{ semaphore_container_gid }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ semaphore_runner_private_key_path }}"
+      mode: '0600'
+    - path: "{{ semaphore_runner_public_key_path }}"
+      mode: '0644'
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Read the Semaphore runner public key
+  ansible.builtin.slurp:
+    src: "{{ semaphore_runner_public_key_path }}"
+  register: semaphore_runner_public_key
+
+- name: Authorize the restricted Semaphore runner key
+  ansible.builtin.lineinfile:
+    path: "{{ semaphore_authorized_keys_path }}"
+    create: true
+    owner: "{{ semaphore_native_uid }}"
+    group: "{{ semaphore_native_gid }}"
+    mode: '0600'
+    line: >-
+      from="{{ semaphore_runner_source_cidr }}",restrict
+      {{ semaphore_runner_public_key.content | b64decode | trim }}
+
+- name: Read the VPS SSH host public key
+  ansible.builtin.slurp:
+    src: "{{ semaphore_host_public_key_path }}"
+  register: semaphore_host_public_key
+
+- name: Install the pinned VPS SSH host key for the runner
+  ansible.builtin.copy:
+    content: >-
+      {{ semaphore_runner_ssh_host }}
+      {{ (semaphore_host_public_key.content | b64decode).split()[0] }}
+      {{ (semaphore_host_public_key.content | b64decode).split()[1] }}
+    dest: "{{ semaphore_runner_known_hosts_path }}"
+    owner: "{{ semaphore_container_uid }}"
+    group: "{{ semaphore_container_gid }}"
+    mode: '0600'
+
+- name: Deploy the Semaphore Compose project
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ semaphore_compose_path }}"
+    owner: root
+    group: root
+    mode: '0644'

@@ -41,6 +41,10 @@
   ansible.builtin.import_playbook: playbooks/install_openbao.yml
   tags: [openbao]
 
+- name: Deploy Semaphore UI
+  ansible.builtin.import_playbook: playbooks/install_semaphore.yml
+  tags: [semaphore]
+
 - name: Deploy BIND DNS
   ansible.builtin.import_playbook: playbooks/install_bind_dns.yml
   tags: [bind_dns]
