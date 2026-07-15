@@ -1,0 +1,26 @@
+---
+- name: Render Semaphore Compose for validation
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    semaphore_image: >-
+      semaphoreui/semaphore@sha256:f6651f30d5bf962afe13831b579c3e0f02a13a45735f852b4de3225d98859c8e
+    semaphore_bind_address: 10.78.0.1
+    semaphore_host_port: 3001
+    semaphore_container_port: 3000
+    semaphore_state_dir: "{{ test_output_dir }}/state"
+    semaphore_tmp_dir: "{{ test_output_dir }}/tmp"
+    semaphore_config_path: "{{ test_output_dir }}/config/config.json"
+    semaphore_runner_private_key_path: "{{ test_output_dir }}/runner/id_ed25519"
+    semaphore_runner_known_hosts_path: "{{ test_output_dir }}/runner/known_hosts"
+    semaphore_runner_container_key_path: /run/semaphore-runner/id_ed25519
+    semaphore_runner_container_known_hosts_path: /run/semaphore-runner/known_hosts
+    semaphore_network_name: semaphore-test
+    semaphore_network_subnet: 172.30.0.0/24
+  tasks:
+    - name: Render the Semaphore Compose artifact
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../../ansible/playbooks/roles/semaphore/templates/compose.yml.j2"
+        dest: "{{ test_output_dir }}/compose.yml"
+        mode: '0600'

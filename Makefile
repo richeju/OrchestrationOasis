@@ -22,6 +22,7 @@ test:
 	./scripts/tests/run-lint.test.sh
 	./scripts/tests/safety-gates.test.sh
 	./scripts/tests/restic-role.test.sh
+	./scripts/tests/semaphore-role.test.sh
 
 check: lint syntax test
 

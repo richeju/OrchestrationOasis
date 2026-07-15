@@ -15,7 +15,6 @@
       loop:
         - docker.service
         - openvpn-hermes-ovh.service
-        - semaphore.service
 
     - name: List failed systemd units
       ansible.builtin.command:

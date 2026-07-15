@@ -1,0 +1,6 @@
+---
+- name: Deploy Semaphore UI with Docker Compose
+  hosts: semaphore
+  become: true
+  roles:
+    - semaphore
