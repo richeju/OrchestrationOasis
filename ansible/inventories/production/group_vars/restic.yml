@@ -1,0 +1,28 @@
+---
+# Non-secret production backup selection. A host still opts in by joining the
+# restic inventory group; credentials remain root-only on the target.
+restic_backup_paths:
+  - /etc/ssh
+  - /etc/ufw
+  - /etc/openvpn
+  - /etc/systemd/system
+  - /home/debian/.hermes/config.yaml
+  - /home/debian/.hermes/.env
+  - /home/debian/OrchestrationOasis
+  - /home/debian/authentik
+  - /home/debian/openbao
+  - /home/debian/netbox
+  - /home/debian/semaphore
+  - /home/debian/.semaphore
+
+restic_exclude_patterns:
+  - /home/debian/.hermes/hermes-agent/**
+  - /home/debian/.hermes/node/**
+  - /home/debian/.hermes/image_cache/**
+  - /home/debian/.hermes/audio_cache/**
+  - /home/debian/.hermes/session_db/**
+  - /home/debian/.hermes/logs/**
+  - /home/debian/.hermes/chats/**
+  - /home/debian/OrchestrationOasis/.git/**
+  - /home/debian/OrchestrationOasis/.venv/**
+  - /home/debian/OrchestrationOasis/.trivy-cache/**

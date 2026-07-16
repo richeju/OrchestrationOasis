@@ -46,6 +46,8 @@ restic:
         - /home/debian/authentik
         - /home/debian/openbao
         - /home/debian/netbox
+        - /home/debian/semaphore
+        - /home/debian/.semaphore
       restic_exclude_patterns:
         - /home/debian/.hermes/hermes-agent/**
         - /home/debian/.hermes/node/**
@@ -55,10 +57,15 @@ restic:
         - /home/debian/.hermes/logs/**
         - /home/debian/.hermes/chats/**
         - /home/debian/OrchestrationOasis/.git/**
+        - /home/debian/OrchestrationOasis/.venv/**
+        - /home/debian/OrchestrationOasis/.trivy-cache/**
 ```
 
-Only include paths that exist. Repository data, caches, pCloud mounts, Docker
-layers, and rebuildable artifacts should not be recursively backed up.
+Only include paths that exist. `/home/debian/.semaphore` contains the live
+Semaphore SQLite state; `/home/debian/semaphore` alone only protects deployment
+assets. Repository data, caches, pCloud mounts, Docker layers, and rebuildable
+artifacts such as `.venv` and `.trivy-cache` should not be recursively backed
+up.
 
 ## Deployment and first run
 
