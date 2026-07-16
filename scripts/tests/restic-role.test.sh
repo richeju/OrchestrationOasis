@@ -3,9 +3,31 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 localhost_inventory="$repo_root/scripts/tests/fixtures/localhost-inventory.yml"
+production_vars="$repo_root/ansible/inventories/production/group_vars/restic.yml"
 export ANSIBLE_ROLES_PATH="$repo_root/ansible/playbooks/roles"
 output_dir=$(mktemp -d)
 trap 'rm -rf "$output_dir"' EXIT
+
+python3 - "$production_vars" <<'PY'
+import sys
+import yaml
+
+config = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
+paths = config["restic_backup_paths"]
+excludes = config["restic_exclude_patterns"]
+required_paths = {
+    "/home/debian/OrchestrationOasis",
+    "/home/debian/.semaphore",
+    "/home/debian/semaphore",
+}
+required_excludes = {
+    "/home/debian/OrchestrationOasis/.venv/**",
+    "/home/debian/OrchestrationOasis/.trivy-cache/**",
+}
+assert required_paths <= set(paths)
+assert required_excludes <= set(excludes)
+assert all(path.rstrip("/") != "/home/debian/infraforge" for path in paths)
+PY
 
 ansible-playbook \
   --inventory "$localhost_inventory" \

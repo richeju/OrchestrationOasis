@@ -13,7 +13,7 @@ restic_script_path: /usr/local/sbin/infraforge-backup.sh
 restic_audit_script_path: /usr/local/sbin/infraforge-backup-audit.sh
 restic_service_path: /etc/systemd/system/infraforge-backup.service
 restic_timer_path: /etc/systemd/system/infraforge-backup.timer
-restic_backup_host: "{{ ansible_hostname | default(inventory_hostname) }}"
+restic_backup_host: "{{ ansible_facts['hostname'] | default(inventory_hostname) }}"
 
 # Every source must be selected explicitly in production inventory.
 restic_backup_paths: []
