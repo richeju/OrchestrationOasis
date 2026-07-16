@@ -50,6 +50,16 @@ timer = systemd_properties(TIMER, ["NextElapseUSecRealtime", "LastTriggerUSec"])
 snapshots = json.loads(run_ok(["restic", "--no-cache", "snapshots", "--json"]))
 latest = snapshots[-1] if snapshots else None
 latest_time = latest["time"] if latest else None
+application_complete = None
+{% if restic_application_backup_enabled | bool %}
+if latest:
+    listing = run_ok(["restic", "--no-cache", "ls", latest["id"]]).splitlines()
+    application_complete = any(
+        line.startswith({{ (restic_application_backup_root ~ '/runs/') | to_json }})
+        and line.endswith("/COMPLETE")
+        for line in listing
+    )
+{% endif %}
 age_hours = None
 if latest_time:
     timestamp = datetime.datetime.fromisoformat(latest_time)
@@ -77,6 +87,11 @@ elif age_hours is not None and age_hours > 36:
 if lock_ids:
     status = "degraded"
     reasons.append("restic_locks_present")
+{% if restic_application_backup_enabled | bool %}
+if not application_complete:
+    status = "degraded"
+    reasons.append("application_backup_incomplete")
+{% endif %}
 
 _, journal, _ = run(["journalctl", "-u", SERVICE, "-n", "12", "--no-pager"])
 print(json.dumps({
@@ -92,6 +107,7 @@ print(json.dumps({
         "paths": latest.get("paths") if latest else None,
     },
     "locks": lock_ids,
+    "application_backup_complete": application_complete,
     "journal_tail": journal.strip().splitlines()[-12:],
 }, ensure_ascii=False, indent=2))
 PY

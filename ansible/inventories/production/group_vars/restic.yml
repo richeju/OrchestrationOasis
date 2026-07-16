@@ -14,6 +14,16 @@ restic_backup_paths:
   - /home/debian/netbox
   - /home/debian/semaphore
   - /home/debian/.semaphore
+  - /var/backups/infraforge
+
+restic_application_backup_enabled: true
+restic_netbox_backup_enabled: true
+restic_authentik_backup_enabled: true
+restic_openbao_backup_enabled: true
+restic_semaphore_backup_enabled: true
+restic_netbox_writer_containers:
+  - netbox-netbox-worker-1
+  - netbox-netbox-1
 
 restic_exclude_patterns:
   - /home/debian/.hermes/hermes-agent/**

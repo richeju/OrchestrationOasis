@@ -3,7 +3,7 @@
 This page is the canonical boundary between observed production state and the
 automation currently owned by this repository. It contains no credentials.
 
-Last verified: 2026-07-15 from the Infraforge VPS.
+Last verified: 2026-07-16 from the Infraforge VPS.
 
 ## Status vocabulary
 
@@ -22,8 +22,8 @@ Last verified: 2026-07-15 from the Infraforge VPS.
 | --- | --- | --- | --- |
 | Docker | Native systemd service | Host local | Managed baseline |
 | Semaphore | Docker Compose in `/home/debian/semaphore` | VPN `10.78.0.1:3001` | Migrated and managed |
-| OpenBao | Docker Compose in `/home/debian/openbao` | VPN TLS `10.78.0.1:8200` | Partial; Raft backup/restore remains incomplete |
-| Restic/rclone | Native root-only scripts and systemd timers | No listening port | Managed |
+| OpenBao | Docker Compose in `/home/debian/openbao` | VPN TLS `10.78.0.1:8200` | Partial; automated Raft snapshots are managed, isolated full restore remains |
+| Restic/rclone | Native root-only scripts, application-consistent export hook and systemd timers | No listening port | Managed |
 | NetBox | Official netbox-docker stack in `/home/debian/netbox`, including worker, PostgreSQL and Valkey | VPN `10.78.0.1:8000` | Observed only |
 | Authentik | Docker Compose in `/home/debian/authentik` | VPN `10.78.0.1:9000` | Observed only |
 | Prometheus | Not detected | None | Planned |

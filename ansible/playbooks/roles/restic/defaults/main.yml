@@ -11,6 +11,29 @@ restic_provision_password_file: false
 restic_cache_dir: /var/cache/restic
 restic_script_path: /usr/local/sbin/infraforge-backup.sh
 restic_audit_script_path: /usr/local/sbin/infraforge-backup-audit.sh
+restic_application_backup_enabled: false
+restic_application_backup_root: /var/backups/infraforge
+restic_application_backup_script_path: /usr/local/sbin/infraforge-backup-prepare.sh
+
+restic_netbox_backup_enabled: false
+restic_netbox_postgres_container: netbox-postgres-1
+restic_netbox_container: netbox-netbox-1
+restic_netbox_media_volume: netbox_netbox-media-files
+restic_netbox_writer_containers:
+  - netbox-netbox-worker-1
+  - netbox-netbox-1
+
+restic_authentik_backup_enabled: false
+restic_authentik_postgres_container: authentik-postgresql-1
+
+restic_openbao_backup_enabled: false
+restic_openbao_container: openbao
+restic_openbao_address: https://10.78.0.1:8200
+restic_openbao_ca_file: /home/debian/openbao/tls/ca.crt
+restic_openbao_approle_file: /root/.config/openbao/backup-approle.json
+
+restic_semaphore_backup_enabled: false
+restic_semaphore_database_path: /home/debian/.semaphore/semaphore.db
 restic_service_path: /etc/systemd/system/infraforge-backup.service
 restic_timer_path: /etc/systemd/system/infraforge-backup.timer
 restic_backup_host: "{{ ansible_facts['hostname'] | default(inventory_hostname) }}"

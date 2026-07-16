@@ -1,0 +1,112 @@
+---
+- name: Create application-backup directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  loop:
+    - "{{ restic_application_backup_root }}"
+    - "{{ restic_application_backup_root }}/runs"
+
+- name: Inspect application-backup source files
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+  loop:
+    - path: "{{ restic_semaphore_database_path }}"
+      enabled: "{{ restic_semaphore_backup_enabled }}"
+    - path: "{{ restic_openbao_ca_file }}"
+      enabled: "{{ restic_openbao_backup_enabled }}"
+    - path: "{{ restic_openbao_approle_file }}"
+      enabled: "{{ restic_openbao_backup_enabled }}"
+  when: item.enabled | bool
+  register: restic_application_source_files
+  no_log: true
+
+- name: Require protected application-backup source files
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isreg
+      - >-
+        item.item.path != restic_openbao_approle_file or
+        (item.stat.pw_name == 'root' and item.stat.mode == '0600')
+    fail_msg: >-
+      An application-backup prerequisite is missing or insufficiently protected.
+      The OpenBao AppRole file must be root-owned with mode 0600.
+  loop: >-
+    {{ restic_application_source_files.results | default([]) |
+       selectattr('stat', 'defined') | list }}
+  loop_control:
+    label: "{{ item.item.path }}"
+  no_log: true
+
+- name: Verify application containers are running
+  ansible.builtin.command:
+    argv:
+      - docker
+      - inspect
+      - --format={{ '{{' }}.State.Running{{ '}}' }}
+      - "{{ item.name }}"
+  loop:
+    - name: "{{ restic_netbox_postgres_container }}"
+      enabled: "{{ restic_netbox_backup_enabled }}"
+    - name: "{{ restic_netbox_container }}"
+      enabled: "{{ restic_netbox_backup_enabled }}"
+    - name: "{{ restic_authentik_postgres_container }}"
+      enabled: "{{ restic_authentik_backup_enabled }}"
+    - name: "{{ restic_openbao_container }}"
+      enabled: "{{ restic_openbao_backup_enabled }}"
+  when: item.enabled | bool
+  register: restic_application_containers
+  changed_when: false
+  failed_when: >-
+    restic_application_containers.rc != 0 or
+    restic_application_containers.stdout | trim != 'true'
+  check_mode: false
+
+- name: Verify NetBox writer containers are running
+  ansible.builtin.command:
+    argv:
+      - docker
+      - inspect
+      - --format={{ '{{' }}.State.Running{{ '}}' }}
+      - "{{ item }}"
+  loop: "{{ restic_netbox_writer_containers }}"
+  when: restic_netbox_backup_enabled | bool
+  register: restic_netbox_writers
+  changed_when: false
+  failed_when: >-
+    restic_netbox_writers.rc != 0 or
+    restic_netbox_writers.stdout | trim != 'true'
+  check_mode: false
+
+- name: Verify NetBox media volume exists
+  ansible.builtin.command:
+    argv:
+      - docker
+      - volume
+      - inspect
+      - "{{ restic_netbox_media_volume }}"
+  when: restic_netbox_backup_enabled | bool
+  changed_when: false
+  check_mode: false
+
+- name: Install application-backup preparation script
+  ansible.builtin.template:
+    src: restic-application-backup.sh.j2
+    dest: "{{ restic_application_backup_script_path }}"
+    owner: root
+    group: root
+    mode: '0700'
+  notify: Restart Restic timer
+
+- name: Validate application-backup preparation script
+  ansible.builtin.command:
+    argv:
+      - bash
+      - -n
+      - "{{ restic_application_backup_script_path }}"
+  changed_when: false
+  when: not ansible_check_mode

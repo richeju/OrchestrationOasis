@@ -6,7 +6,8 @@ localhost_inventory="$repo_root/scripts/tests/fixtures/localhost-inventory.yml"
 production_vars="$repo_root/ansible/inventories/production/group_vars/restic.yml"
 export ANSIBLE_ROLES_PATH="$repo_root/ansible/playbooks/roles"
 output_dir=$(mktemp -d)
-trap 'rm -rf "$output_dir"' EXIT
+pycache_dir=$(mktemp -d)
+trap 'rm -rf "$output_dir" "$pycache_dir"' EXIT
 
 python3 - "$production_vars" <<'PY'
 import sys
@@ -19,6 +20,7 @@ required_paths = {
     "/home/debian/OrchestrationOasis",
     "/home/debian/.semaphore",
     "/home/debian/semaphore",
+    "/var/backups/infraforge",
 }
 required_excludes = {
     "/home/debian/OrchestrationOasis/.venv/**",
@@ -27,6 +29,14 @@ required_excludes = {
 assert required_paths <= set(paths)
 assert required_excludes <= set(excludes)
 assert all(path.rstrip("/") != "/home/debian/infraforge" for path in paths)
+for key in (
+    "restic_application_backup_enabled",
+    "restic_netbox_backup_enabled",
+    "restic_authentik_backup_enabled",
+    "restic_openbao_backup_enabled",
+    "restic_semaphore_backup_enabled",
+):
+    assert config[key] is True
 PY
 
 ansible-playbook \
@@ -71,6 +81,28 @@ ansible-playbook \
 
 bash -n "$output_dir/restic-backup.sh"
 bash -n "$output_dir/restic-backup-audit.sh"
+bash -n "$output_dir/restic-application-backup.sh"
+PYTHONPYCACHEPREFIX="$pycache_dir" \
+  python3 -m py_compile "$repo_root/scripts/provision-openbao-backup-approle.py"
+PYTHONPYCACHEPREFIX="$pycache_dir" \
+  python3 "$repo_root/scripts/tests/openbao-backup-approle.test.py"
+
+prepare_line=$(grep -n -F "$output_dir/restic-application-backup.sh" \
+  "$output_dir/restic-backup.sh" | cut -d: -f1)
+backup_line=$(grep -n -F 'restic backup \' "$output_dir/restic-backup.sh" | cut -d: -f1)
+[[ $prepare_line -lt $backup_line ]]
+grep -F 'pg_dump --format=custom' "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F 'source.backup(target)' "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F '/v1/sys/storage/raft/snapshot' "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F 'OpenBao snapshot checksum mismatch' "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F 'sha256sum -- "${artifacts[@]}"' "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F ': >"$stage/COMPLETE"' "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F 'application_backup_incomplete' "$output_dir/restic-backup-audit.sh" >/dev/null
+grep -F 'requires the parent backup lock' "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F 'docker stop --time 60' "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F 'docker volume inspect netbox-media-test' "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F 'restart_netbox_writers' "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F 'kernel/random/uuid' "$output_dir/restic-application-backup.sh" >/dev/null
 
 systemd-analyze verify \
   "$output_dir/restic-backup.service" \
@@ -82,7 +114,9 @@ if grep -R -F '{{' "$output_dir" >/dev/null; then
 fi
 
 if command -v shellcheck >/dev/null 2>&1; then
-  shellcheck "$output_dir/restic-backup.sh" "$output_dir/restic-backup-audit.sh"
+  shellcheck "$output_dir/restic-backup.sh" \
+    "$output_dir/restic-backup-audit.sh" \
+    "$output_dir/restic-application-backup.sh"
 fi
 
 ansible-playbook \

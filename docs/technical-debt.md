@@ -41,6 +41,10 @@ reachability for every service before changing the `DOCKER-USER` chain.
 
 ## Validation backlog
 
+- Automate the already exercised disposable PostgreSQL 18 and 16 restore drill
+  in a periodic job and extend its smoke queries to application-level canaries.
+- Exercise an OpenBao Raft restore on a disposable 2.5.5 node with independent
+  recovery material; archive and checksum validation alone is not a restore test.
 - Extend the current Compose rendering suite to every remaining service role.
 - Add Molecule or equivalent runtime/idempotence tests for Docker, UFW, BIND,
   NetBox, OpenBao, and YubiKey.

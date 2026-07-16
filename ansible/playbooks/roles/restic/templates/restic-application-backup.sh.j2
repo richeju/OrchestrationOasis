@@ -1,0 +1,243 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+if [[ $EUID -ne 0 ]]; then
+  printf 'Application backup preparation must run as root.\n' >&2
+  exit 1
+fi
+
+if [[ ${INFRAFORGE_BACKUP_LOCK_HELD:-} != 1 ]] || \
+   [[ $(readlink -- "/proc/$$/fd/9" 2>/dev/null || true) != "/run/lock/{{ restic_backup_name }}.lock" ]] || \
+   ! flock -n 9; then
+  printf 'Application backup preparation requires the parent backup lock.\n' >&2
+  exit 1
+fi
+
+backup_root={{ restic_application_backup_root | quote }}
+runs_dir="$backup_root/runs"
+stage=
+current_link_tmp=
+{% if restic_netbox_backup_enabled | bool %}
+declare -A netbox_stopped=()
+netbox_writer_containers=(
+{% for container in restic_netbox_writer_containers %}
+  {{ container | quote }}
+{% endfor %}
+)
+
+restart_netbox_writers() {
+  local restart_rc=0
+{% for container in restic_netbox_writer_containers | reverse %}
+  if [[ ${netbox_stopped[{{ container | quote }}]:-} == 1 ]]; then
+    if docker start {{ container | quote }} >/dev/null; then
+      unset 'netbox_stopped[{{ container }}]'
+    else
+      printf 'Failed to restart NetBox writer %s.\n' {{ container | quote }} >&2
+      restart_rc=1
+    fi
+  fi
+{% endfor %}
+  return "$restart_rc"
+}
+{% endif %}
+
+cleanup() {
+  local rc=$?
+  local restart_rc=0
+  trap - EXIT
+{% if restic_netbox_backup_enabled | bool %}
+  if ! restart_netbox_writers; then
+    restart_rc=1
+  fi
+{% endif %}
+  if [[ -n ${current_link_tmp:-} ]]; then
+    rm -f -- "$current_link_tmp"
+  fi
+  if [[ -n ${stage:-} && -d $stage ]]; then
+    rm -rf -- "$stage"
+  fi
+  if (( rc == 0 && restart_rc != 0 )); then
+    rc=$restart_rc
+  fi
+  exit "$rc"
+}
+trap cleanup EXIT
+trap 'exit 128' INT TERM HUP
+
+mkdir -p -- "$runs_dir"
+find "$runs_dir" -mindepth 1 -maxdepth 1 -type d \
+  -name '.staging.*' -mmin +1440 -exec rm -rf -- {} +
+stage=$(mktemp -d "$runs_dir/.staging.XXXXXX")
+artifacts=()
+
+{% if restic_netbox_backup_enabled | bool %}
+for container in "${netbox_writer_containers[@]}"; do
+  if docker inspect "$container" | python3 -c \
+    'import json, sys; raise SystemExit(not json.load(sys.stdin)[0]["State"]["Running"])'; then
+    netbox_stopped["$container"]=1
+    docker stop --time 60 "$container" >/dev/null
+  fi
+done
+
+docker exec --user postgres {{ restic_netbox_postgres_container | quote }} \
+  sh -eu -c '
+    export PGPASSWORD="$POSTGRES_PASSWORD"
+    exec pg_dump --format=custom --no-owner --no-acl \
+      --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"
+  ' >"$stage/netbox.postgresql.dump.part"
+docker exec --user postgres -i {{ restic_netbox_postgres_container | quote }} \
+  pg_restore --list <"$stage/netbox.postgresql.dump.part" >/dev/null
+mv -- "$stage/netbox.postgresql.dump.part" "$stage/netbox.postgresql.dump"
+artifacts+=(netbox.postgresql.dump)
+
+media_mount=$(docker volume inspect {{ restic_netbox_media_volume | quote }} | \
+  python3 -c 'import json, sys; print(json.load(sys.stdin)[0]["Mountpoint"])')
+media_parent=${media_mount%/*}
+media_name=${media_mount##*/}
+tar -C "$media_parent" --transform="s,^$media_name,media," \
+  -cf - "$media_name" >"$stage/netbox-media.tar.part"
+tar -tf "$stage/netbox-media.tar.part" >/dev/null
+mv -- "$stage/netbox-media.tar.part" "$stage/netbox-media.tar"
+artifacts+=(netbox-media.tar)
+restart_netbox_writers
+{% endif %}
+
+{% if restic_authentik_backup_enabled | bool %}
+docker exec --user postgres {{ restic_authentik_postgres_container | quote }} \
+  sh -eu -c '
+    export PGPASSWORD="$POSTGRES_PASSWORD"
+    exec pg_dump --format=custom --no-owner --no-acl \
+      --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"
+  ' >"$stage/authentik.postgresql.dump.part"
+docker exec --user postgres -i {{ restic_authentik_postgres_container | quote }} \
+  pg_restore --list <"$stage/authentik.postgresql.dump.part" >/dev/null
+mv -- "$stage/authentik.postgresql.dump.part" "$stage/authentik.postgresql.dump"
+artifacts+=(authentik.postgresql.dump)
+{% endif %}
+
+{% if restic_semaphore_backup_enabled | bool %}
+python3 - {{ restic_semaphore_database_path | quote }} \
+  "$stage/semaphore.sqlite3.part" <<'PY'
+import sqlite3
+import sys
+
+source = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)
+target = sqlite3.connect(sys.argv[2])
+try:
+    source.backup(target)
+    result = target.execute("PRAGMA integrity_check").fetchone()
+    if result != ("ok",):
+        raise RuntimeError(f"SQLite integrity check failed: {result!r}")
+finally:
+    target.close()
+    source.close()
+PY
+mv -- "$stage/semaphore.sqlite3.part" "$stage/semaphore.sqlite3"
+artifacts+=(semaphore.sqlite3)
+{% endif %}
+
+{% if restic_openbao_backup_enabled | bool %}
+python3 - \
+  {{ restic_openbao_approle_file | quote }} \
+  {{ restic_openbao_ca_file | quote }} \
+  {{ restic_openbao_address | quote }} \
+  "$stage/openbao.raft.snap.part" <<'PY'
+import hashlib
+import json
+import os
+import ssl
+import sys
+import tarfile
+import urllib.request
+
+approle_file, ca_file, address, output_file = sys.argv[1:]
+with open(approle_file, encoding="utf-8") as handle:
+    credentials = json.load(handle)
+context = ssl.create_default_context(cafile=ca_file)
+payload = json.dumps({
+    "role_id": credentials["role_id"],
+    "secret_id": credentials["secret_id"],
+}).encode()
+login = urllib.request.Request(
+    address.rstrip("/") + "/v1/auth/approle/login",
+    data=payload,
+    headers={"Content-Type": "application/json"},
+    method="POST",
+)
+with urllib.request.urlopen(login, context=context, timeout=30) as response:
+    token = json.load(response)["auth"]["client_token"]
+snapshot = urllib.request.Request(
+    address.rstrip("/") + "/v1/sys/storage/raft/snapshot",
+    headers={"X-Vault-Token": token},
+    method="GET",
+)
+flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+fd = os.open(output_file, flags, 0o600)
+try:
+    with os.fdopen(fd, "wb") as output, urllib.request.urlopen(
+        snapshot, context=context, timeout=120
+    ) as response:
+        while chunk := response.read(1024 * 1024):
+            output.write(chunk)
+except BaseException:
+    try:
+        os.unlink(output_file)
+    except FileNotFoundError:
+        pass
+    raise
+
+with tarfile.open(output_file, "r:gz") as archive:
+    members = {member.name: member for member in archive.getmembers()}
+    expected = {"meta.json", "state.bin", "SHA256SUMS", "SHA256SUMS.sealed"}
+    if set(members) != expected or not all(member.isfile() for member in members.values()):
+        raise RuntimeError("Unexpected OpenBao snapshot archive structure")
+    checksum_text = archive.extractfile(members["SHA256SUMS"]).read().decode()
+    expected_hashes = {}
+    for line in checksum_text.splitlines():
+        digest, name = line.split(maxsplit=1)
+        expected_hashes[name.lstrip(" *")] = digest
+    for name in ("state.bin", "meta.json"):
+        data = archive.extractfile(members[name]).read()
+        if hashlib.sha256(data).hexdigest() != expected_hashes.get(name):
+            raise RuntimeError(f"OpenBao snapshot checksum mismatch: {name}")
+    metadata = json.loads(archive.extractfile(members["meta.json"]).read())
+    required = {"ID", "Index", "Term", "Version", "Configuration"}
+    if not required.issubset(metadata):
+        raise RuntimeError("OpenBao snapshot metadata is incomplete")
+PY
+mv -- "$stage/openbao.raft.snap.part" "$stage/openbao.raft.snap"
+artifacts+=(openbao.raft.snap)
+{% endif %}
+
+(
+  cd "$stage"
+  sha256sum -- "${artifacts[@]}" >SHA256SUMS
+)
+{
+  printf 'schema=1\n'
+  printf 'created_utc=%s\n' "$(date -u +%FT%TZ)"
+  printf 'host=%s\n' "$(hostname)"
+  printf 'artifact_count=%s\n' "{% raw %}${#artifacts[@]}{% endraw %}"
+} >"$stage/manifest"
+: >"$stage/COMPLETE"
+
+token=$(tr -d '-' </proc/sys/kernel/random/uuid)
+generation="$(date -u +%Y%m%dT%H%M%SZ)-$token"
+published="$runs_dir/$generation"
+if [[ -e $published ]]; then
+  printf 'Refusing an application-backup generation collision.\n' >&2
+  exit 1
+fi
+mv -T -- "$stage" "$published"
+stage="$published"
+
+current_link_tmp="$backup_root/.current.$token"
+ln -s -- "runs/$generation" "$current_link_tmp"
+mv -Tf -- "$current_link_tmp" "$backup_root/current"
+current_link_tmp=
+stage=
+find "$runs_dir" -mindepth 1 -maxdepth 1 -type d \
+  ! -name "$generation" ! -name '.staging.*' -exec rm -rf -- {} +
+
+printf 'Application backup generation %s prepared successfully.\n' "$generation"

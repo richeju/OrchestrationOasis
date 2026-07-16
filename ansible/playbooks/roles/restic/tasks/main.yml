@@ -26,6 +26,10 @@
 - name: Enforce safe Restic password-file handling
   ansible.builtin.include_tasks: password.yml
 
+- name: Configure application-consistent backup preparation
+  ansible.builtin.include_tasks: application-backups.yml
+  when: restic_application_backup_enabled | bool
+
 - name: Inspect Restic prerequisites
   ansible.builtin.stat:
     path: "{{ item }}"
@@ -60,7 +64,13 @@
 - name: Refuse missing backup sources
   ansible.builtin.assert:
     that:
-      - item.stat.exists
+      - >-
+        item.stat.exists or
+        (
+          ansible_check_mode and
+          restic_application_backup_enabled | bool and
+          item.item == restic_application_backup_root
+        )
     fail_msg: "Configured Restic source does not exist: {{ item.item }}"
   loop: "{{ restic_source_paths.results }}"
   loop_control:
@@ -136,7 +146,7 @@
       mode: "0644"
   notify: Restart Restic timer
 
-- name: Validate generated backup script
+- name: Validate generated Restic backup script
   ansible.builtin.command:
     argv:
       - bash
