@@ -19,6 +19,10 @@ set +a
 
 mkdir -p "$RESTIC_CACHE_DIR"
 
+{% if restic_application_backup_enabled | bool %}
+INFRAFORGE_BACKUP_LOCK_HELD=1 {{ restic_application_backup_script_path | quote }}
+{% endif %}
+
 backup_paths=(
 {% for path in restic_backup_paths %}
   {{ path | quote }}

@@ -16,6 +16,7 @@
     restic_environment_file: "{{ test_output_dir }}/restic.env"
     restic_script_path: "{{ test_output_dir }}/restic-backup.sh"
     restic_audit_script_path: "{{ test_output_dir }}/restic-backup-audit.sh"
+    restic_application_backup_script_path: "{{ test_output_dir }}/restic-application-backup.sh"
     restic_service_path: "{{ test_output_dir }}/restic-backup.service"
     restic_timer_path: "{{ test_output_dir }}/restic-backup.timer"
   tasks:
@@ -33,6 +34,9 @@
           mode: "0700"
         - src: restic-backup-audit.sh.j2
           dest: restic-backup-audit.sh
+          mode: "0700"
+        - src: restic-application-backup.sh.j2
+          dest: restic-application-backup.sh
           mode: "0700"
         - src: restic-backup.service.j2
           dest: restic-backup.service

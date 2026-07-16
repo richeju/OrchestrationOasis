@@ -116,11 +116,78 @@ place.
 
 ## Application consistency
 
-Restic protects files, not live database consistency. PostgreSQL-backed NetBox
-and Authentik require database dumps or native backup hooks before the filesystem
-snapshot. OpenBao should use an authenticated Raft snapshot. These hooks must be
-implemented and restore-tested separately; copying live database or Raft files
-alone is not a complete recovery plan.
+Production enables a fail-closed preparation hook before every Restic snapshot.
+It creates a root-only atomic generation under `/var/backups/infraforge` with:
+
+- NetBox and Authentik PostgreSQL custom-format dumps produced by each database
+  container and validated with the matching `pg_restore --list`;
+- a NetBox media archive;
+- a Semaphore SQLite online backup validated with `PRAGMA integrity_check`;
+- an OpenBao Raft snapshot fetched through a dedicated least-privilege AppRole
+  and validated from its archive structure, internal SHA-256 manifest, Raft
+  metadata, and expected metadata fields;
+- SHA-256 checksums, a non-secret manifest, and a `COMPLETE` marker.
+
+NetBox application and worker containers are stopped for the
+short interval covering both its PostgreSQL dump and media archive, then started
+again before the other exports continue. An EXIT/signal trap restarts every
+writer that the hook stopped. This brief maintenance window gives the database
+and media archive one coherent writer-free boundary.
+
+The hook publishes a generation only after every validation succeeds. Any dump,
+TLS, authorization, container, disk, or integrity failure stops the service
+before `restic backup`, `forget`, or `prune` runs. Files and directories use
+root-only permissions. A previous generation is never silently reused as the
+current backup.
+
+Provision the OpenBao identity once from a protected root session:
+
+```bash
+sudo python3 scripts/provision-openbao-backup-approle.py
+sudo stat -c '%U:%G %a' /root/.config/openbao/backup-approle.json
+```
+
+The file must report `root:root 600`. The tool reconciles policy and TTL
+settings, validates an existing identity, and never prints role or secret IDs.
+The resulting token has only `read` capability on
+`sys/storage/raft/snapshot`; administrative endpoints must return HTTP 403.
+
+The AppRole SecretID is a long-lived machine credential protected by root-only
+permissions. Rotate and revoke it explicitly with:
+
+```bash
+sudo python3 scripts/provision-openbao-backup-approle.py --rotate
+sudo systemctl start infraforge-backup.service
+```
+
+### Artifact restore validation
+
+Restore one complete generation into an isolated directory, never over live
+services. Require `COMPLETE`, then validate:
+
+```bash
+sha256sum --check SHA256SUMS
+pg_restore --list netbox.postgresql.dump
+pg_restore --list authentik.postgresql.dump
+tar -tf netbox-media.tar
+python3 - <<'PY'
+import sqlite3
+db = sqlite3.connect('file:semaphore.sqlite3?mode=ro', uri=True)
+assert db.execute('PRAGMA integrity_check').fetchone() == ('ok',)
+PY
+```
+
+Artifact validation is not a full disaster-recovery exercise. PostgreSQL dumps
+must also be restored into disposable containers matching PostgreSQL 18 for
+NetBox and PostgreSQL 16 for Authentik. OpenBao needs a disposable 2.5.5 node,
+independent recovery material, `raft snapshot restore -force`, unseal, and
+canary checks. Never test these restores against production.
+
+The 2026-07-16 restore drill exercised the NetBox dump on disposable PostgreSQL
+18, the Authentik dump on disposable PostgreSQL 16, SQLite integrity, all outer
+checksums, and the NetBox media archive restored from pCloud. The OpenBao archive
+and its internal checksums were validated; the isolated OpenBao restore remains
+an explicit validation-backlog item.
 
 ## Migrating from Duplicati
 

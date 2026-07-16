@@ -8,6 +8,27 @@
       - restic_repository.split(':')[1] == restic_rclone_remote
       - restic_backup_paths | length > 0
       - restic_check_data_subset is ansible.builtin.match('^(100|[1-9][0-9]?)%$')
+      - not restic_application_backup_enabled | bool or restic_application_backup_root in restic_backup_paths
+      - >-
+        not restic_application_backup_enabled | bool or
+        restic_netbox_backup_enabled | bool or
+        restic_authentik_backup_enabled | bool or
+        restic_openbao_backup_enabled | bool or
+        restic_semaphore_backup_enabled | bool
+      - restic_application_backup_root is ansible.builtin.match('^/[^\n]+$')
+      - restic_application_backup_script_path is ansible.builtin.match('^/[^\n]+$')
+      - restic_netbox_postgres_container is ansible.builtin.match('^[A-Za-z0-9][A-Za-z0-9_.-]+$')
+      - restic_netbox_container is ansible.builtin.match('^[A-Za-z0-9][A-Za-z0-9_.-]+$')
+      - restic_netbox_media_volume is ansible.builtin.match('^[A-Za-z0-9][A-Za-z0-9_.-]+$')
+      - restic_netbox_writer_containers | length > 0
+      - restic_netbox_container in restic_netbox_writer_containers
+      - >-
+        restic_netbox_writer_containers |
+        reject('match', '^[A-Za-z0-9][A-Za-z0-9_.-]+$') |
+        list | length == 0
+      - restic_authentik_postgres_container is ansible.builtin.match('^[A-Za-z0-9][A-Za-z0-9_.-]+$')
+      - restic_openbao_container is ansible.builtin.match('^[A-Za-z0-9][A-Za-z0-9_.-]+$')
     fail_msg: >-
       Configure matching rclone remote and Restic repository values, at least
-      one backup path, and a read-data subset between 1% and 100%.
+      one backup path, a read-data subset between 1% and 100%, and a coherent
+      application-backup configuration with conservative container names.
