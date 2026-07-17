@@ -1,0 +1,9 @@
+---
+hermes_user: test-hermes
+hermes_group: test-hermes
+hermes_home: /tmp/test-hermes
+hermes_install_dir: /tmp/test-hermes/hermes-agent
+hermes_binary_path: /tmp/test-home/.local/bin/hermes
+hermes_gateway_service_name: hermes-gateway.service
+hermes_gateway_restart_sec: 5
+hermes_gateway_timeout_stop_sec: 210

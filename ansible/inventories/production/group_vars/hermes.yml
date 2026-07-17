@@ -1,0 +1,18 @@
+---
+hermes_user: debian
+hermes_group: debian
+hermes_home: /home/debian/.hermes
+hermes_install_dir: /home/debian/.hermes/hermes-agent
+hermes_binary_path: /home/debian/.local/bin/hermes
+hermes_manage_installation: false
+hermes_migrate_config: false
+hermes_manage_gateway: true
+hermes_gateway_enabled: true
+hermes_gateway_started: true
+hermes_enable_linger: true
+hermes_verify_runtime: true
+hermes_required_private_files:
+  - /home/debian/.hermes/config.yaml
+  - /home/debian/.hermes/.env
+  - /home/debian/.hermes/auth.json
+  - /home/debian/.hermes/whatsapp/session/creds.json

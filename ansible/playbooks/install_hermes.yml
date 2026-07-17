@@ -1,0 +1,6 @@
+---
+- name: Manage Hermes Agent and its messaging gateway
+  hosts: hermes
+  become: true
+  roles:
+    - hermes

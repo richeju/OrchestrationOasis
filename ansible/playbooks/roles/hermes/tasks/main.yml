@@ -1,0 +1,21 @@
+---
+- name: Validate Hermes role inputs and current state
+  ansible.builtin.import_tasks: validate.yml
+
+- name: Protect Hermes private state metadata
+  ansible.builtin.import_tasks: state.yml
+
+- name: Install or update Hermes when explicitly enabled
+  ansible.builtin.import_tasks: install.yml
+
+- name: Configure the Hermes gateway
+  ansible.builtin.import_tasks: gateway.yml
+  when:
+    - hermes_manage_gateway | bool
+    - not (ansible_check_mode and not (hermes_binary_usable | bool))
+
+- name: Verify Hermes runtime
+  ansible.builtin.import_tasks: verify.yml
+  when:
+    - hermes_verify_runtime | bool
+    - not (ansible_check_mode and not (hermes_binary_usable | bool))

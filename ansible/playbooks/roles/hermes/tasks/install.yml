@@ -1,0 +1,148 @@
+---
+- name: Inspect protected Hermes installer cache directory
+  ansible.builtin.stat:
+    path: "{{ hermes_installer_path | dirname }}"
+  register: hermes_installer_cache
+  when: hermes_manage_installation | bool
+
+- name: Create protected Hermes installer cache directory
+  ansible.builtin.file:
+    path: "{{ hermes_installer_path | dirname }}"
+    state: directory
+    owner: root
+    group: "{{ hermes_group }}"
+    mode: "0750"
+  when: hermes_manage_installation | bool
+
+- name: Download pinned Hermes installer
+  ansible.builtin.get_url:
+    url: "{{ hermes_installer_url }}"
+    dest: "{{ hermes_installer_path }}"
+    checksum: "{{ hermes_installer_checksum }}"
+    owner: root
+    group: "{{ hermes_group }}"
+    mode: "0550"
+  when:
+    - hermes_manage_installation | bool
+    - not ansible_check_mode or hermes_installer_cache.stat.exists
+
+- name: Inspect Hermes installation directory
+  ansible.builtin.stat:
+    path: "{{ hermes_install_dir }}/.git"
+  register: hermes_install_git
+  when: hermes_manage_installation | bool
+
+- name: Read installed Hermes commit
+  ansible.builtin.command:
+    argv:
+      - git
+      - -C
+      - "{{ hermes_install_dir }}"
+      - rev-parse
+      - HEAD
+  register: hermes_installed_commit
+  changed_when: false
+  failed_when: false
+  when:
+    - hermes_manage_installation | bool
+    - hermes_install_git.stat.exists
+
+- name: Inspect local Hermes modifications before update
+  ansible.builtin.command:
+    argv:
+      - git
+      - -C
+      - "{{ hermes_install_dir }}"
+      - status
+      - --porcelain
+  register: hermes_install_status
+  changed_when: false
+  when:
+    - hermes_manage_installation | bool
+    - hermes_install_git.stat.exists
+    - hermes_installed_commit.stdout | default('') != hermes_install_commit
+
+- name: Refuse to overwrite local Hermes modifications
+  ansible.builtin.assert:
+    that:
+      - hermes_install_status.stdout | default('') | trim == ''
+    fail_msg: Refusing to update a Hermes checkout with local modifications.
+  when:
+    - hermes_manage_installation | bool
+    - hermes_install_git.stat.exists
+    - hermes_installed_commit.stdout | default('') != hermes_install_commit
+
+- name: Require explicit approval before replacing an existing Hermes checkout
+  ansible.builtin.assert:
+    that:
+      - hermes_allow_checkout_replacement | bool
+    fail_msg: >-
+      Refusing to let the installer replace an existing Hermes checkout.
+      Preserve it and explicitly enable hermes_allow_checkout_replacement for
+      the reviewed one-time adoption.
+  when:
+    - hermes_manage_installation | bool
+    - hermes_install_git.stat.exists
+    - hermes_installed_commit.stdout | default('') != hermes_install_commit
+
+- name: Install pinned Hermes checkout non-interactively
+  become: true
+  become_user: "{{ hermes_user }}"
+  ansible.builtin.command:
+    argv: >-
+      {{
+        [
+          hermes_installer_path,
+          '--skip-setup',
+          '--non-interactive',
+          '--commit', hermes_install_commit,
+          '--dir', hermes_install_dir,
+          '--hermes-home', hermes_home
+        ]
+        + (['--skip-browser'] if hermes_skip_browser_install | bool else [])
+      }}
+  environment:
+    HOME: "/home/{{ hermes_user }}"
+    HERMES_HOME: "{{ hermes_home }}"
+  changed_when: true
+  when:
+    - hermes_manage_installation | bool
+    - >-
+      hermes_installed_commit.stdout | default('') != hermes_install_commit or
+      not (hermes_binary_usable | bool)
+  notify: Restart Hermes gateway
+
+- name: Checksum Hermes config before optional migration
+  ansible.builtin.stat:
+    path: "{{ hermes_home }}/config.yaml"
+    checksum_algorithm: sha256
+  register: hermes_config_before
+  when: hermes_migrate_config | bool
+
+- name: Migrate Hermes config without an interactive terminal
+  become: true
+  become_user: "{{ hermes_user }}"
+  ansible.builtin.command: "{{ hermes_binary_path }} config migrate"
+  args:
+    stdin: ""
+    stdin_add_newline: false
+  environment:
+    HOME: "/home/{{ hermes_user }}"
+    HERMES_HOME: "{{ hermes_home }}"
+  changed_when: false
+  no_log: true
+  when: hermes_migrate_config | bool
+
+- name: Checksum Hermes config after optional migration
+  ansible.builtin.stat:
+    path: "{{ hermes_home }}/config.yaml"
+    checksum_algorithm: sha256
+  register: hermes_config_after
+  when: hermes_migrate_config | bool
+
+- name: Record Hermes config migration change
+  ansible.builtin.debug:
+    msg: Hermes configuration schema was migrated.
+  changed_when: hermes_config_before.stat.checksum != hermes_config_after.stat.checksum
+  when: hermes_migrate_config | bool
+  notify: Restart Hermes gateway

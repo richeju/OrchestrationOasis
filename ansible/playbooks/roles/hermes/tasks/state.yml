@@ -1,0 +1,10 @@
+---
+- name: Enforce owner and mode on Hermes private state files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: file
+    owner: "{{ hermes_user }}"
+    group: "{{ hermes_group }}"
+    mode: "0600"
+  loop: "{{ hermes_required_private_files }}"
+  no_log: true

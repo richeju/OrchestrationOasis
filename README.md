@@ -12,7 +12,7 @@ credential belongs in Git.
 
 The complete Linux playbook contains roles for system updates, Docker, UFW,
 ZeroTier, pCloud through rclone, Dashy, encrypted Restic backups, Prometheus,
-NetBox, BIND, OpenBao, Semaphore, and YubiKey SSH authentication. A role is not
+Hermes Agent, NetBox, BIND, OpenBao, Semaphore, and YubiKey SSH authentication. A role is not
 necessarily enabled or authoritative for the current production service. Read
 the [current infrastructure state](docs/current-state.md) before deployment.
 
@@ -94,6 +94,7 @@ Further reading:
 - [Deployment and GitHub Actions](docs/deployment.md)
 - [pCloud operations](docs/pcloud.md)
 - [Restic backup and restore](docs/restic.md)
+- [Hermes Agent operations](docs/hermes.md)
 - [OpenBao operations](docs/openbao.md)
 - [Semaphore operations](docs/semaphore.md)
 - [Security notes](README.security.md)

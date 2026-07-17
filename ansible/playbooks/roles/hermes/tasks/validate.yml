@@ -1,0 +1,76 @@
+---
+- name: Validate Hermes variables before changes
+  ansible.builtin.assert:
+    that:
+      - hermes_user is match('^[a-z_][a-z0-9_-]*$')
+      - hermes_group is match('^[a-z_][a-z0-9_-]*$')
+      - hermes_home is match('^/[A-Za-z0-9._/@+-]+$')
+      - hermes_home != '/'
+      - hermes_install_dir is match('^/[A-Za-z0-9._/@+-]+$')
+      - hermes_binary_path is match('^/[A-Za-z0-9._/@+-]+$')
+      - hermes_gateway_service_name is match('^[A-Za-z0-9_.@-]+\\.service$')
+      - hermes_installer_checksum is match('^sha256:[0-9a-f]{64}$')
+      - not (hermes_manage_installation | bool) or hermes_installer_url is match('^https://[A-Za-z0-9._~:/@+-]*/[0-9a-f]{40}/[A-Za-z0-9._~:/@+-]+$')
+      - not (hermes_manage_installation | bool) or hermes_install_commit is match('^[0-9a-f]{40}$')
+      - hermes_required_private_files | length > 0
+      - hermes_required_private_files | select('match', '^/') | list | length == hermes_required_private_files | length
+    fail_msg: Hermes role inputs are unsafe or incomplete.
+
+- name: Resolve Hermes service account
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ hermes_user }}"
+
+- name: Resolve Hermes service group
+  ansible.builtin.getent:
+    database: group
+    key: "{{ hermes_group }}"
+
+- name: Record Hermes service account runtime identifiers
+  ansible.builtin.set_fact:
+    hermes_user_uid: "{{ ansible_facts.getent_passwd[hermes_user][1] }}"
+    hermes_user_runtime_dir: "/run/user/{{ ansible_facts.getent_passwd[hermes_user][1] }}"
+
+- name: Inspect existing Hermes binary
+  ansible.builtin.stat:
+    path: "{{ hermes_binary_path }}"
+  register: hermes_binary_stat
+
+- name: Require an existing Hermes installation when installation management is disabled
+  ansible.builtin.assert:
+    that:
+      - hermes_binary_stat.stat.exists
+      - hermes_binary_stat.stat.isreg or hermes_binary_stat.stat.islnk
+      - hermes_binary_stat.stat.executable
+    fail_msg: >-
+      Hermes is not installed at the configured path. Set
+      hermes_manage_installation=true with a pinned commit to install it.
+  when: not (hermes_manage_installation | bool)
+
+- name: Record whether the Hermes binary is currently usable
+  ansible.builtin.set_fact:
+    hermes_binary_usable: >-
+      {{
+        hermes_binary_stat.stat.exists and
+        (hermes_binary_stat.stat.isreg or hermes_binary_stat.stat.islnk) and
+        hermes_binary_stat.stat.executable
+      }}
+
+- name: Inspect required Hermes private files
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ hermes_required_private_files }}"
+  register: hermes_private_file_stats
+  no_log: true
+
+- name: Require protected Hermes private files
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isreg
+    fail_msg: >-
+      A required Hermes private state file is missing or not a regular file.
+      Pre-provision private state before bootstrap; this role never invents or
+      overwrites credentials.
+  loop: "{{ hermes_private_file_stats.results }}"
+  no_log: true

@@ -1,0 +1,34 @@
+---
+hermes_user: debian
+hermes_group: "{{ hermes_user }}"
+hermes_home: "/home/{{ hermes_user }}/.hermes"
+hermes_install_dir: "{{ hermes_home }}/hermes-agent"
+hermes_binary_path: "/home/{{ hermes_user }}/.local/bin/hermes"
+
+# Installation is opt-in. When enabled, both the installer and Git checkout are
+# pinned so a normal convergence never tracks an unreviewed moving target.
+hermes_manage_installation: false
+hermes_installer_url: https://raw.githubusercontent.com/NousResearch/hermes-agent/e0240d7bf7ce0d665417d45de0bfa9a65cb0ab48/scripts/install.sh
+hermes_installer_checksum: sha256:c2e4326c1660bd45f64321996eb15bda35e7a4649e32a310495a61972a2804c8
+hermes_installer_path: /var/cache/infraforge/hermes-install.sh
+hermes_install_commit: ""
+hermes_skip_browser_install: true
+hermes_allow_checkout_replacement: false
+
+# Config and credentials remain user-owned. Migration is explicit and runs
+# without a TTY; it fails rather than waiting on an interactive prompt.
+hermes_migrate_config: false
+hermes_required_private_files:
+  - "{{ hermes_home }}/config.yaml"
+  - "{{ hermes_home }}/.env"
+
+hermes_manage_gateway: true
+hermes_gateway_service_name: hermes-gateway.service
+hermes_gateway_unit_path: "/home/{{ hermes_user }}/.config/systemd/user/{{ hermes_gateway_service_name }}"
+hermes_gateway_dropin_path: "/home/{{ hermes_user }}/.config/systemd/user/{{ hermes_gateway_service_name }}.d/infraforge-hardening.conf"
+hermes_gateway_restart_sec: 5
+hermes_gateway_timeout_stop_sec: 210
+hermes_gateway_enabled: true
+hermes_gateway_started: true
+hermes_enable_linger: true
+hermes_verify_runtime: true

@@ -27,6 +27,7 @@ test:
 	./scripts/tests/safety-gates.test.sh
 	./scripts/tests/repository-safety.test.sh
 	./scripts/tests/service-roles.test.sh
+	./scripts/tests/hermes-role.test.sh
 	./scripts/tests/restic-role.test.sh
 	./scripts/tests/semaphore-role.test.sh
 
