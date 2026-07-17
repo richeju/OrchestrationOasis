@@ -32,7 +32,7 @@ verifies the resulting mount.
 
 Linux baseline hosts belong to `linux`. Service groups correspond to tags in
 `site.yml`: `docker`, `ufw`, `zerotier`, `pcloud`, `dashboard`, `restic`,
-`prometheus`, `netbox`, `semaphore`, `bind_dns`, and `yubikey`.
+`hermes`, `prometheus`, `netbox`, `semaphore`, `bind_dns`, and `yubikey`.
 `openbao` is the private secrets-service group and should only target hosts
 reachable through a trusted administration network.
 `infraforge_vps` is reserved for the read-only production audit and carries its

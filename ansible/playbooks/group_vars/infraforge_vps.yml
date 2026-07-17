@@ -1,10 +1,16 @@
 ---
 # Non-secret live topology used by the read-only Infraforge VPS audit.
 infraforge_audit_required_services:
+  - caddy.service
   - docker.service
   - openvpn-hermes-ovh.service
 
 infraforge_audit_http_services:
+  - name: Caddy Authentik proxy
+    url: http://10.78.0.1/
+    headers:
+      Host: auth.jrnet.fr
+    status_codes: [200, 302]
   - name: NetBox
     url: http://10.78.0.1:8000/login/
     status_codes: [200]

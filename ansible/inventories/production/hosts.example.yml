@@ -23,6 +23,8 @@ all:
       hosts: {}
     restic:
       hosts: {}
+    hermes:
+      hosts: {}
     prometheus:
       hosts: {}
     netbox:
