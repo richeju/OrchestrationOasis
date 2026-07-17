@@ -14,7 +14,8 @@
         restic_netbox_backup_enabled | bool or
         restic_authentik_backup_enabled | bool or
         restic_openbao_backup_enabled | bool or
-        restic_semaphore_backup_enabled | bool
+        restic_semaphore_backup_enabled | bool or
+        restic_hermes_backup_enabled | bool
       - restic_application_backup_root is ansible.builtin.match('^/[^\n]+$')
       - restic_application_backup_script_path is ansible.builtin.match('^/[^\n]+$')
       - restic_netbox_postgres_container is ansible.builtin.match('^[A-Za-z0-9][A-Za-z0-9_.-]+$')
@@ -28,7 +29,28 @@
         list | length == 0
       - restic_authentik_postgres_container is ansible.builtin.match('^[A-Za-z0-9][A-Za-z0-9_.-]+$')
       - restic_openbao_container is ansible.builtin.match('^[A-Za-z0-9][A-Za-z0-9_.-]+$')
+      - restic_hermes_user is ansible.builtin.match('^[a-z_][a-z0-9_-]*$')
+      - restic_hermes_home is ansible.builtin.match('^/[^\n]+$')
+      - restic_hermes_gateway_service is ansible.builtin.match('^[A-Za-z0-9][A-Za-z0-9_.@-]+\.service$')
+      - restic_hermes_restore_script_path is ansible.builtin.match('^/[^\n]+$')
+      - restic_hermes_archive_entries | length > 0
+      - restic_hermes_archive_entries | unique | list | length == restic_hermes_archive_entries | length
+      - >-
+        restic_hermes_archive_entries |
+        reject('match', '^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$') |
+        list | length == 0
+      - >-
+        {%- set topology = namespace(valid=true) -%}
+        {%- for parent in restic_hermes_archive_entries -%}
+          {%- for child in restic_hermes_archive_entries -%}
+            {%- if parent != child and child.startswith(parent ~ '/') -%}
+              {%- set topology.valid = false -%}
+            {%- endif -%}
+          {%- endfor -%}
+        {%- endfor -%}
+        {{ topology.valid }}
     fail_msg: >-
       Configure matching rclone remote and Restic repository values, at least
       one backup path, a read-data subset between 1% and 100%, and a coherent
-      application-backup configuration with conservative container names.
+      application-backup configuration with conservative container names and
+      unique, non-overlapping Hermes managed paths.

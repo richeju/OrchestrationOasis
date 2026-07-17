@@ -41,6 +41,60 @@ restart_netbox_writers() {
   return "$restart_rc"
 }
 {% endif %}
+{% if restic_hermes_backup_enabled | bool %}
+hermes_gateway_stopped=0
+hermes_gateway_load_state=
+hermes_gateway_active_state=
+hermes_gateway_sub_state=
+hermes_gateway_main_pid=
+hermes_gateway_control_pid=
+
+read_hermes_gateway_state() {
+  local output
+  local key
+  local value
+  output=$(systemctl --user --machine={{ restic_hermes_user | quote }}@.host \
+    show {{ restic_hermes_gateway_service | quote }} \
+    --property=LoadState --property=ActiveState --property=SubState \
+    --property=MainPID --property=ControlPID) || return 1
+  hermes_gateway_load_state=
+  hermes_gateway_active_state=
+  hermes_gateway_sub_state=
+  hermes_gateway_main_pid=
+  hermes_gateway_control_pid=
+  while IFS='=' read -r key value; do
+    case "$key" in
+      LoadState) hermes_gateway_load_state=$value ;;
+      ActiveState) hermes_gateway_active_state=$value ;;
+      SubState) hermes_gateway_sub_state=$value ;;
+      MainPID) hermes_gateway_main_pid=$value ;;
+      ControlPID) hermes_gateway_control_pid=$value ;;
+    esac
+  done <<< "$output"
+  [[ $hermes_gateway_load_state == loaded &&
+     $hermes_gateway_main_pid =~ ^[0-9]+$ &&
+     $hermes_gateway_control_pid =~ ^[0-9]+$ ]]
+}
+
+hermes_gateway_is_quiescent() {
+  [[ ( $hermes_gateway_active_state == inactive ||
+       $hermes_gateway_active_state == failed ) &&
+     $hermes_gateway_main_pid == 0 &&
+     $hermes_gateway_control_pid == 0 ]]
+}
+
+restart_hermes_gateway() {
+  if [[ $hermes_gateway_stopped == 1 ]]; then
+    if systemctl --user --machine={{ restic_hermes_user | quote }}@.host \
+      start {{ restic_hermes_gateway_service | quote }}; then
+      hermes_gateway_stopped=0
+    else
+      printf 'Failed to restart the Hermes gateway.\n' >&2
+      return 1
+    fi
+  fi
+}
+{% endif %}
 
 cleanup() {
   local rc=$?
@@ -48,6 +102,11 @@ cleanup() {
   trap - EXIT
 {% if restic_netbox_backup_enabled | bool %}
   if ! restart_netbox_writers; then
+    restart_rc=1
+  fi
+{% endif %}
+{% if restic_hermes_backup_enabled | bool %}
+  if ! restart_hermes_gateway; then
     restart_rc=1
   fi
 {% endif %}
@@ -135,6 +194,132 @@ finally:
 PY
 mv -- "$stage/semaphore.sqlite3.part" "$stage/semaphore.sqlite3"
 artifacts+=(semaphore.sqlite3)
+{% endif %}
+
+{% if restic_hermes_backup_enabled | bool %}
+if ! read_hermes_gateway_state; then
+  printf 'Cannot inspect the Hermes gateway state.\n' >&2
+  exit 1
+fi
+case "$hermes_gateway_active_state" in
+  active)
+    if [[ $hermes_gateway_main_pid == 0 || $hermes_gateway_control_pid != 0 ]]; then
+      printf 'Cannot prove a stable active Hermes gateway: %s/%s main=%s control=%s.\n' \
+        "$hermes_gateway_active_state" "$hermes_gateway_sub_state" \
+        "$hermes_gateway_main_pid" "$hermes_gateway_control_pid" >&2
+      exit 1
+    fi
+    hermes_gateway_stopped=1
+    set +e
+    systemctl --user --machine={{ restic_hermes_user | quote }}@.host \
+      stop {{ restic_hermes_gateway_service | quote }}
+    hermes_gateway_stop_rc=$?
+    set -e
+    if ! read_hermes_gateway_state || ! hermes_gateway_is_quiescent; then
+      printf 'Hermes gateway did not become quiescent after stop: %s/%s main=%s control=%s stop_rc=%s.\n' \
+        "$hermes_gateway_active_state" "$hermes_gateway_sub_state" \
+        "$hermes_gateway_main_pid" "$hermes_gateway_control_pid" \
+        "$hermes_gateway_stop_rc" >&2
+      exit 1
+    fi
+    ;;
+  inactive|failed)
+    if ! hermes_gateway_is_quiescent; then
+      printf 'Hermes gateway state is not quiescent: %s/%s main=%s control=%s.\n' \
+        "$hermes_gateway_active_state" "$hermes_gateway_sub_state" \
+        "$hermes_gateway_main_pid" "$hermes_gateway_control_pid" >&2
+      exit 1
+    fi
+    ;;
+  *)
+    printf 'Cannot prove a safe Hermes gateway state: %s/%s main=%s control=%s.\n' \
+      "$hermes_gateway_active_state" "$hermes_gateway_sub_state" \
+      "$hermes_gateway_main_pid" "$hermes_gateway_control_pid" >&2
+    exit 1
+    ;;
+esac
+
+python3 - \
+  {{ restic_hermes_state_database_path | quote }} \
+  "$stage/hermes-state.sqlite3.part" \
+  {{ restic_hermes_kanban_database_path | quote }} \
+  "$stage/hermes-kanban.sqlite3.part" <<'PY'
+import pathlib
+import shutil
+import sqlite3
+import sys
+
+for source_path, target_path in zip(sys.argv[1::2], sys.argv[2::2]):
+    source_path = pathlib.Path(source_path)
+    target_path = pathlib.Path(target_path)
+    stable_source = target_path.with_suffix(target_path.suffix + ".source")
+    companions = [stable_source]
+    shutil.copy2(source_path, stable_source)
+    for suffix in ("-wal", "-shm"):
+        source_companion = pathlib.Path(str(source_path) + suffix)
+        target_companion = pathlib.Path(str(stable_source) + suffix)
+        if source_companion.exists():
+            shutil.copy2(source_companion, target_companion)
+            companions.append(target_companion)
+    source = sqlite3.connect(stable_source)
+    target = sqlite3.connect(target_path)
+    try:
+        source.backup(target)
+        result = target.execute("PRAGMA integrity_check").fetchone()
+        if result != ("ok",):
+            raise RuntimeError(
+                f"SQLite integrity check failed for {source_path}: {result!r}"
+            )
+    finally:
+        target.close()
+        source.close()
+        for companion in companions:
+            companion.unlink(missing_ok=True)
+PY
+mv -- "$stage/hermes-state.sqlite3.part" "$stage/hermes-state.sqlite3"
+mv -- "$stage/hermes-kanban.sqlite3.part" "$stage/hermes-kanban.sqlite3"
+artifacts+=(hermes-state.sqlite3 hermes-kanban.sqlite3)
+
+hermes_archive_entries=()
+{% for entry in restic_hermes_archive_entries %}
+if [[ -e {{ (restic_hermes_home ~ '/' ~ entry) | quote }} ]]; then
+  hermes_archive_entries+=({{ entry | quote }})
+fi
+{% endfor %}
+tar -C {{ restic_hermes_home | quote }} \
+  --exclude='cron/.tick.lock' \
+  --exclude='cron/ticker_heartbeat' \
+  --exclude='whatsapp/session/bridge.pid' \
+  -cf "$stage/hermes-files.tar.part" -- "${hermes_archive_entries[@]}"
+python3 - "$stage/hermes-files.tar.part" <<'PY'
+import pathlib
+import sys
+import tarfile
+
+required = {
+    ".env",
+    "config.yaml",
+    "auth.json",
+    "memories/MEMORY.md",
+    "memories/USER.md",
+    "whatsapp/session/creds.json",
+}
+with tarfile.open(sys.argv[1], "r:") as archive:
+    names = set()
+    for member in archive.getmembers():
+        path = pathlib.PurePosixPath(member.name)
+        if path.is_absolute() or ".." in path.parts:
+            raise RuntimeError(f"Unsafe Hermes archive path: {member.name}")
+        if not (member.isfile() or member.isdir()):
+            raise RuntimeError(f"Unsupported Hermes archive member: {member.name}")
+        names.add(member.name.removeprefix("./").rstrip("/"))
+missing = required - names
+if missing:
+    raise RuntimeError(f"Hermes archive is incomplete: {sorted(missing)}")
+PY
+mv -- "$stage/hermes-files.tar.part" "$stage/hermes-files.tar"
+artifacts+=(hermes-files.tar)
+restart_hermes_gateway
 {% endif %}
 
 {% if restic_openbao_backup_enabled | bool %}

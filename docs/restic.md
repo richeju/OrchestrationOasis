@@ -123,6 +123,11 @@ It creates a root-only atomic generation under `/var/backups/infraforge` with:
   container and validated with the matching `pg_restore --list`;
 - a NetBox media archive;
 - a Semaphore SQLite online backup validated with `PRAGMA integrity_check`;
+- Hermes `state.db` and `kanban.db` SQLite online backups, each validated with
+  `PRAGMA integrity_check`;
+- a root-only Hermes data archive containing configuration, provider OAuth,
+  memories, skills, cron definitions, canonical session metadata, and the
+  WhatsApp linked-device session;
 - an OpenBao Raft snapshot fetched through a dedicated least-privilege AppRole
   and validated from its archive structure, internal SHA-256 manifest, Raft
   metadata, and expected metadata fields;
@@ -133,6 +138,20 @@ short interval covering both its PostgreSQL dump and media archive, then started
 again before the other exports continue. An EXIT/signal trap restarts every
 writer that the hook stopped. This brief maintenance window gives the database
 and media archive one coherent writer-free boundary.
+
+The Hermes user gateway is stopped for the short interval covering both SQLite
+copies and the data archive. The hook tracks whether it stopped the gateway and
+restarts it in the normal path and in the EXIT/signal cleanup path. Rebuildable
+runtime data (`hermes-agent`, Node, LSP binaries, caches, logs, and update
+snapshots) is intentionally excluded; reinstall Hermes before or after restoring
+the persistent data bundle.
+
+The hook accepts a stable running gateway or a proven quiescent user-service
+state. Quiescent means `ActiveState` is `inactive` or `failed` **and** both
+`MainPID` and `ControlPID` are zero. A D-Bus failure, unknown unit, transitional
+state, or residual process fails the backup before any Hermes file is read. A
+non-zero `systemctl stop` result is accepted only when the subsequent PID-based
+check proves quiescence.
 
 The hook publishes a generation only after every validation succeeds. Any dump,
 TLS, authorization, container, disk, or integrity failure stops the service
@@ -175,7 +194,61 @@ import sqlite3
 db = sqlite3.connect('file:semaphore.sqlite3?mode=ro', uri=True)
 assert db.execute('PRAGMA integrity_check').fetchone() == ('ok',)
 PY
+python3 - <<'PY'
+import sqlite3
+for path in ('hermes-state.sqlite3', 'hermes-kanban.sqlite3'):
+    db = sqlite3.connect(f'file:{path}?mode=ro', uri=True)
+    assert db.execute('PRAGMA integrity_check').fetchone() == ('ok',)
+PY
+tar -tf hermes-files.tar
 ```
+
+### Hermes disaster recovery
+
+Restore a complete generation from Restic into an isolated directory first,
+then use the installed root-only helper. An alternate target is safe for a
+restore drill and does not require stopping production:
+
+```bash
+sudo install -d -o debian -g debian -m 0700 /var/tmp/hermes-restore-drill
+sudo infraforge-hermes-restore.sh \
+  /path/to/restored/generation \
+  /var/tmp/hermes-restore-drill
+```
+
+For an actual recovery, reinstall Hermes without running the gateway, stop the
+user gateway, restore into `/home/debian/.hermes`, run diagnostics, and start it:
+
+```bash
+sudo systemctl --user --machine=debian@.host stop hermes-gateway.service
+sudo infraforge-hermes-restore.sh /path/to/restored/generation
+sudo -u debian hermes doctor
+sudo systemctl --user --machine=debian@.host start hermes-gateway.service
+```
+
+The helper refuses a production restore while the gateway is active. It requires
+the generation `COMPLETE` marker, validates every generation checksum, rejects
+unsafe tar members, requires the memory, auth and WhatsApp identity files,
+removes stale managed paths, and checks both databases before and after
+installation. It canonicalizes the target and binds an existing target to its
+device/inode identity. All managed-path mutations use stable directory descriptors,
+`O_NOFOLLOW`, and relative `dir_fd` renames; no privileged mutation re-resolves a
+user-controlled nested path. Existing managed paths are journaled before each
+rename into a root-only rollback tree. Signals trigger descriptor-relative rollback;
+a fully recovered transaction is cleaned automatically, while evidence from an
+incomplete rollback is deliberately preserved for manual recovery. A production
+restore proceeds only when the user-service manager proves the gateway is
+quiescent (`inactive` or `failed`, with both service PIDs zero).
+The target must already exist as a real directory. The generation path must be
+canonical, root-owned, and non-writable by group or other users, including every
+ancestor and checksum-listed artifact. Temporary transaction trees are created
+under root-owned sticky `/var/tmp`; the helper refuses the restore unless `/var/tmp`
+and the target are on the same filesystem so descriptor-relative renames remain
+atomic. Managed archive entries must be unique and may not overlap as parent/child
+paths.
+The Restic repository password and rclone configuration remain
+separate root-only recovery prerequisites; back them up through the secrets
+recovery process as well.
 
 Artifact validation is not a full disaster-recovery exercise. PostgreSQL dumps
 must also be restored into disposable containers matching PostgreSQL 18 for

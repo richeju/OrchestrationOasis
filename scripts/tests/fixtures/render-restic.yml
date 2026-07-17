@@ -17,6 +17,7 @@
     restic_script_path: "{{ test_output_dir }}/restic-backup.sh"
     restic_audit_script_path: "{{ test_output_dir }}/restic-backup-audit.sh"
     restic_application_backup_script_path: "{{ test_output_dir }}/restic-application-backup.sh"
+    restic_hermes_restore_script_path: "{{ test_output_dir }}/restic-hermes-restore.sh"
     restic_service_path: "{{ test_output_dir }}/restic-backup.service"
     restic_timer_path: "{{ test_output_dir }}/restic-backup.timer"
   tasks:
@@ -37,6 +38,9 @@
           mode: "0700"
         - src: restic-application-backup.sh.j2
           dest: restic-application-backup.sh
+          mode: "0700"
+        - src: restic-hermes-restore.sh.j2
+          dest: restic-hermes-restore.sh
           mode: "0700"
         - src: restic-backup.service.j2
           dest: restic-backup.service

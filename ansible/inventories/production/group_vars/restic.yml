@@ -21,6 +21,7 @@ restic_netbox_backup_enabled: true
 restic_authentik_backup_enabled: true
 restic_openbao_backup_enabled: true
 restic_semaphore_backup_enabled: true
+restic_hermes_backup_enabled: true
 restic_netbox_writer_containers:
   - netbox-netbox-worker-1
   - netbox-netbox-1
