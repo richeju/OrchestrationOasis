@@ -1,0 +1,82 @@
+---
+- name: Ensure Hermes user systemd directory exists
+  ansible.builtin.file:
+    path: "{{ hermes_gateway_unit_path | dirname }}"
+    state: directory
+    owner: "{{ hermes_user }}"
+    group: "{{ hermes_group }}"
+    mode: "0700"
+
+- name: Inspect Hermes linger state
+  ansible.builtin.command:
+    argv:
+      - loginctl
+      - show-user
+      - "{{ hermes_user }}"
+      - --property=Linger
+      - --value
+  register: hermes_linger_state
+  changed_when: false
+  when: hermes_enable_linger | bool
+
+- name: Enable linger for Hermes service account
+  ansible.builtin.command:
+    argv:
+      - loginctl
+      - enable-linger
+      - "{{ hermes_user }}"
+  when:
+    - hermes_enable_linger | bool
+    - hermes_linger_state.stdout | trim != 'yes'
+  changed_when: true
+
+- name: Inspect official Hermes gateway unit
+  ansible.builtin.stat:
+    path: "{{ hermes_gateway_unit_path }}"
+  register: hermes_gateway_unit
+
+- name: Generate official Hermes gateway unit when missing
+  become: true
+  become_user: "{{ hermes_user }}"
+  ansible.builtin.command: >-
+    {{ hermes_binary_path }} gateway install --no-start-now --start-on-login
+  environment:
+    HOME: "/home/{{ hermes_user }}"
+    HERMES_HOME: "{{ hermes_home }}"
+  when: not hermes_gateway_unit.stat.exists
+  changed_when: true
+  notify: Reload Hermes user systemd
+
+- name: Ensure Hermes gateway drop-in directory exists
+  ansible.builtin.file:
+    path: "{{ hermes_gateway_dropin_path | dirname }}"
+    state: directory
+    owner: "{{ hermes_user }}"
+    group: "{{ hermes_group }}"
+    mode: "0700"
+
+- name: Install managed Hermes gateway hardening drop-in
+  ansible.builtin.template:
+    src: hermes-gateway-hardening.conf.j2
+    dest: "{{ hermes_gateway_dropin_path }}"
+    owner: "{{ hermes_user }}"
+    group: "{{ hermes_group }}"
+    mode: "0644"
+  notify:
+    - Reload Hermes user systemd
+    - Restart Hermes gateway
+
+- name: Apply pending Hermes gateway unit changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Converge Hermes gateway user service
+  become: true
+  become_user: "{{ hermes_user }}"
+  ansible.builtin.systemd_service:
+    name: "{{ hermes_gateway_service_name }}"
+    scope: user
+    enabled: "{{ hermes_gateway_enabled | bool }}"
+    state: "{{ 'started' if hermes_gateway_started | bool else 'stopped' }}"
+  environment:
+    XDG_RUNTIME_DIR: "{{ hermes_user_runtime_dir }}"
+    DBUS_SESSION_BUS_ADDRESS: "unix:path={{ hermes_user_runtime_dir }}/bus"

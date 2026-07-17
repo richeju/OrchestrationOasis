@@ -1,0 +1,9 @@
+[Unit]
+Description=Hermes gateway fixture
+
+[Service]
+Type=simple
+ExecStart=/bin/true
+
+[Install]
+WantedBy=default.target

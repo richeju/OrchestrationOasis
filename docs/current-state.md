@@ -24,6 +24,7 @@ Last verified: 2026-07-16 from the Infraforge VPS.
 | Semaphore | Docker Compose in `/home/debian/semaphore` | VPN `10.78.0.1:3001` | Migrated and managed |
 | OpenBao | Docker Compose in `/home/debian/openbao` | VPN TLS `10.78.0.1:8200` | Partial; automated Raft snapshots are managed, isolated full restore remains |
 | Restic/rclone | Native root-only scripts, application-consistent export hook and systemd timers | No listening port | Managed |
+| Hermes Agent | Per-user Python installation and user systemd messaging gateway | Outbound WhatsApp gateway | Partial; role implemented, live convergence proof pending |
 | NetBox | Official netbox-docker stack in `/home/debian/netbox`, including worker, PostgreSQL and Valkey | VPN `10.78.0.1:8000` | Observed only |
 | Authentik | Docker Compose in `/home/debian/authentik` | VPN `10.78.0.1:9000` | Observed only |
 | Prometheus | Not detected | None | Planned |

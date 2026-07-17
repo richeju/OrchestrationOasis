@@ -1,0 +1,24 @@
+---
+- name: Render Hermes role templates for validation
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - hermes-vars.yml
+  tasks:
+    - name: Copy official Hermes gateway unit fixture
+      ansible.builtin.copy:
+        src: "{{ repo_root }}/scripts/tests/fixtures/hermes-gateway-base.service"
+        dest: "{{ test_output_dir }}/hermes-gateway.service"
+        mode: "0644"
+
+    - name: Create Hermes gateway drop-in fixture directory
+      ansible.builtin.file:
+        path: "{{ test_output_dir }}/hermes-gateway.service.d"
+        state: directory
+        mode: "0755"
+
+    - name: Render Hermes gateway hardening drop-in
+      ansible.builtin.template:
+        src: "{{ repo_root }}/ansible/playbooks/roles/hermes/templates/hermes-gateway-hardening.conf.j2"
+        dest: "{{ test_output_dir }}/hermes-gateway.service.d/infraforge-hardening.conf"
+        mode: "0644"

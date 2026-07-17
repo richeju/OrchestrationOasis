@@ -1,0 +1,57 @@
+---
+- name: Verify Hermes CLI version
+  become: true
+  become_user: "{{ hermes_user }}"
+  ansible.builtin.command: "{{ hermes_binary_path }} --version"
+  environment:
+    HOME: "/home/{{ hermes_user }}"
+    HERMES_HOME: "{{ hermes_home }}"
+  register: hermes_version_check
+  changed_when: false
+
+- name: Verify Hermes config schema
+  become: true
+  become_user: "{{ hermes_user }}"
+  ansible.builtin.command: "{{ hermes_binary_path }} config check"
+  environment:
+    HOME: "/home/{{ hermes_user }}"
+    HERMES_HOME: "{{ hermes_home }}"
+  register: hermes_config_check
+  changed_when: false
+
+- name: Verify Hermes gateway deeply
+  become: true
+  become_user: "{{ hermes_user }}"
+  ansible.builtin.command: "{{ hermes_binary_path }} gateway status --deep"
+  environment:
+    HOME: "/home/{{ hermes_user }}"
+    HERMES_HOME: "{{ hermes_home }}"
+  register: hermes_gateway_deep_status
+  changed_when: false
+  when:
+    - hermes_manage_gateway | bool
+    - hermes_gateway_started | bool
+
+- name: Inspect Hermes gateway user service
+  become: true
+  become_user: "{{ hermes_user }}"
+  ansible.builtin.systemd_service:
+    name: "{{ hermes_gateway_service_name }}"
+    scope: user
+  environment:
+    XDG_RUNTIME_DIR: "{{ hermes_user_runtime_dir }}"
+    DBUS_SESSION_BUS_ADDRESS: "unix:path={{ hermes_user_runtime_dir }}/bus"
+  register: hermes_gateway_service_status
+  when:
+    - hermes_manage_gateway | bool
+    - hermes_gateway_started | bool
+
+- name: Require an active Hermes gateway user service
+  ansible.builtin.assert:
+    that:
+      - hermes_gateway_service_status.status.ActiveState == 'active'
+      - hermes_gateway_service_status.status.SubState == 'running'
+    fail_msg: Hermes gateway user service is not active and running.
+  when:
+    - hermes_manage_gateway | bool
+    - hermes_gateway_started | bool
