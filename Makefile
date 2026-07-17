@@ -1,4 +1,4 @@
-.PHONY: help install lint workflows syntax test check scan
+.PHONY: help install lint workflows syntax test links check scan
 
 help:
 	@echo "install  Install Python and Ansible dependencies"
@@ -6,8 +6,9 @@ help:
 	@echo "workflows Validate GitHub Actions workflows"
 	@echo "syntax   Check the complete playbook syntax"
 	@echo "test     Run local regression tests"
-	@echo "check    Run lint, syntax, and tests"
-	@echo "scan     Scan the repository with Trivy"
+	@echo "links    Validate repository-local Markdown links"
+	@echo "check    Run lint, syntax, tests, and documentation checks"
+	@echo "scan     Audit Python dependencies and scan with Trivy"
 
 install:
 	python3 -m pip install --requirement requirements-dev.txt
@@ -24,6 +25,7 @@ syntax:
 
 test:
 	./scripts/tests/run-lint.test.sh
+	./scripts/tests/markdown-links.test.sh
 	./scripts/tests/safety-gates.test.sh
 	./scripts/tests/repository-safety.test.sh
 	./scripts/tests/service-roles.test.sh
@@ -31,10 +33,11 @@ test:
 	./scripts/tests/restic-role.test.sh
 	./scripts/tests/semaphore-role.test.sh
 
-check: lint workflows syntax test
+links:
+	python3 ./scripts/check-markdown-links.py
+
+check: lint workflows syntax test links
 
 scan:
-	docker run --rm -v $$PWD:/project:ro -v $$PWD/.trivy-cache:/root/.cache/ \
-		aquasec/trivy:0.72.0 fs --scanners vuln,misconfig,secret --ignore-unfixed \
-		--exit-code 1 --severity HIGH,CRITICAL --skip-dirs /project/.venv \
-		--skip-dirs /project/.git --skip-dirs /project/.trivy-cache /project
+	python -m pip_audit --requirement requirements-dev.txt --progress-spinner off
+	./scripts/run-trivy.sh

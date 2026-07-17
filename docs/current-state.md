@@ -3,7 +3,7 @@
 This page is the canonical boundary between observed production state and the
 automation currently owned by this repository. It contains no credentials.
 
-Last verified: 2026-07-16 from the Infraforge VPS.
+Last verified: 2026-07-17 from the Infraforge VPS.
 
 ## Status vocabulary
 
@@ -21,10 +21,12 @@ Last verified: 2026-07-16 from the Infraforge VPS.
 | Service | Production implementation | Exposure | Repository status |
 | --- | --- | --- | --- |
 | Docker | Native systemd service | Host local | Managed baseline |
+| OpenVPN site-to-site | Native `openvpn-hermes-ovh.service`, interface `tun-hermes` | Private routes between VPS and home LANs | Observed only |
+| Caddy | Native systemd service; Authentik reverse proxy | VPN HTTP `10.78.0.1:80` | Observed only |
 | Semaphore | Docker Compose in `/home/debian/semaphore` | VPN `10.78.0.1:3001` | Migrated and managed |
 | OpenBao | Docker Compose in `/home/debian/openbao` | VPN TLS `10.78.0.1:8200` | Partial; automated Raft snapshots are managed, isolated full restore remains |
-| Restic/rclone | Native root-only scripts, application-consistent export hook and systemd timers | No listening port | Managed |
-| Hermes Agent | Per-user Python installation and user systemd messaging gateway | Outbound WhatsApp gateway | Partial; role implemented, live convergence proof pending |
+| Restic/rclone | Native root-only scripts, application-consistent export hook and systemd timers | No listening port | Degraded; the 2026-07-17 daily run failed while proving Hermes quiescence |
+| Hermes Agent | Per-user Python installation and user systemd messaging gateway | Outbound WhatsApp gateway | Partial; live role settings verified, second-convergence and reliable backup proof pending |
 | NetBox | Official netbox-docker stack in `/home/debian/netbox`, including worker, PostgreSQL and Valkey | VPN `10.78.0.1:8000` | Observed only |
 | Authentik | Docker Compose in `/home/debian/authentik` | VPN `10.78.0.1:9000` | Observed only |
 | Prometheus | Not detected | None | Planned |

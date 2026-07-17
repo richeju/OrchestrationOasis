@@ -7,7 +7,12 @@ GNU Make, and an SSH identity accepted by the targets. Targets must be Debian
 hosts with Python installed and an account allowed to use `sudo` without an
 interactive password prompt. Host-key checking is enabled.
 
-Docker is required on the controller only for `make scan`.
+The Docker CLI with Compose v2 is required by the rendering tests in
+`make check`; those `docker compose config` calls do not contact the daemon.
+Docker daemon access is additionally required for `make scan`, directly or
+through passwordless `sudo`; that target runs both `pip-audit` and a
+digest-pinned Trivy image. Trivy always scans secrets and scans vulnerabilities
+or misconfigurations when it recognizes a supported manifest.
 
 Prepare the controller and verify connectivity:
 
@@ -39,6 +44,7 @@ group explicitly.
 | `prometheus` | Docker and an explicit loopback/private bind address |
 | `zerotier` | Docker |
 | `restic` | Root-only rclone config, repository password file, explicit source paths |
+| `hermes` | Existing Hermes account and required private files; read `hermes.md` before opt-in |
 | `pcloud` | Valid rclone pCloud token |
 | `openbao` | Docker and TLS CA/certificate/key already provisioned or supplied |
 | `yubikey` | At least one tested U2F mapping and an out-of-band recovery session |

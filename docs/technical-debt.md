@@ -26,6 +26,16 @@ Prometheus now refuses wildcard publication by default. Docker-published ports
 can still bypass assumptions made by UFW. Determine the intended VPN/LAN/public
 reachability for every service before changing the `DOCKER-USER` chain.
 
+### Preview and idempotence gaps
+
+Semaphore intentionally skips file preparation and migration runtime in check
+mode, so `--check --diff` is not a complete preview of that migration. BIND
+derives zone serials from the current epoch and therefore rewrites zones and
+restarts on otherwise identical convergence. Restic and Hermes also perform
+some cache, package, or directory preparation before all destructive-safety
+preconditions have been evaluated. Reorder those preflights and add a second
+convergence test before treating check mode or idempotence as proven.
+
 ## Medium priority
 
 - Most containers still lack explicit capability drops, read-only filesystems,
@@ -38,6 +48,9 @@ reachability for every service before changing the `DOCKER-USER` chain.
   if the deployed image and ownership model support reliable reopen semantics.
 - Python direct dependencies are pinned, but transitive dependencies and hashes
   are not locked.
+- The Debian bootstrap trusts Docker's repository key from TLS transport without
+  verifying an expected fingerprint; pin and verify the vendor key during the
+  next bootstrap hardening pass.
 
 ## Validation backlog
 
@@ -45,6 +58,11 @@ reachability for every service before changing the `DOCKER-USER` chain.
   in a periodic job and extend its smoke queries to application-level canaries.
 - Exercise an OpenBao Raft restore on a disposable 2.5.5 node with independent
   recovery material; archive and checksum validation alone is not a restore test.
+- Automate the exercised Hermes generation restore, SQLite integrity checks,
+  interrupted-transaction rollback, and hostname-filtered Restic audit fixture.
+- Add an end-to-end disposable `restic backup` and `restic restore` test; current
+  repository tests validate rendering and application hooks, not the entire
+  repository transport.
 - Extend the current Compose rendering suite to every remaining service role.
 - Add Molecule or equivalent runtime/idempotence tests for Docker, UFW, BIND,
   NetBox, OpenBao, and YubiKey.

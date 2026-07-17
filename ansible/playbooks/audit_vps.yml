@@ -44,6 +44,7 @@
     - name: Probe private HTTP services
       ansible.builtin.uri:
         url: "{{ item.url }}"
+        headers: "{{ item.headers | default(omit) }}"
         method: GET
         status_code: "{{ item.status_codes }}"
         follow_redirects: none

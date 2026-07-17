@@ -27,6 +27,7 @@ and the WhatsApp `creds.json`. Task output for these paths is protected with
 Add the target to the `hermes` inventory group, then run:
 
 ```bash
+cd ansible
 ansible-playbook -i inventories/production/hosts.yml \
   playbooks/install_hermes.yml --check --diff
 ansible-playbook -i inventories/production/hosts.yml \
@@ -35,7 +36,9 @@ ansible-playbook -i inventories/production/hosts.yml \
   playbooks/install_hermes.yml
 ```
 
-The second convergence must report `changed=0`. Confirm the gateway afterwards:
+The second convergence must report `changed=0`. Confirm the gateway afterwards
+from an SSH session on the VPS as the configured Hermes account (`debian` in
+production):
 
 ```bash
 hermes config check

@@ -18,10 +18,11 @@ the [current infrastructure state](docs/current-state.md) before deployment.
 
 ## Quick start
 
-Requirements: Git, Python 3.12 or newer with `venv`, GNU Make, an SSH
-identity, and a Debian target reachable through SSH with non-interactive sudo.
-Docker Engine with Compose v2 is required for `make check` template validation
-and for the Trivy security scan.
+Requirements: Git, Python 3.12 or newer with `venv`, GNU Make, Docker Compose
+v2 for configuration rendering, an SSH identity, and a Debian target reachable
+through SSH with non-interactive sudo. `make check` does not need daemon access
+when a native `actionlint` is installed. `make scan` needs Docker daemon access,
+directly or through passwordless `sudo`.
 
 ```bash
 python3 -m venv .venv
@@ -55,6 +56,7 @@ Run all local quality checks from the repository root:
 
 ```bash
 make check
+make scan
 ```
 
 ## Secrets

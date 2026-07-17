@@ -43,6 +43,16 @@ jobs:
           printf '%s\n' "$ANSIBLE_INVENTORY" > "$RUNNER_TEMP/ansible-inventory.yml"
           chmod 0600 "$RUNNER_TEMP/ansible-inventory.yml"
 
+      - name: Validate maintenance targets
+        working-directory: ansible
+        run: |
+          ../scripts/require-ansible-targets.py \
+            --inventory "$RUNNER_TEMP/ansible-inventory.yml" \
+            --playbook playbooks/apply_updates.yml
+          ../scripts/require-ansible-targets.py \
+            --inventory "$RUNNER_TEMP/ansible-inventory.yml" \
+            --playbook playbooks/docker_cleanup.yml
+
       - name: Apply system updates
         working-directory: ansible
         run: >-

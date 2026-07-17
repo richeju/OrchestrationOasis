@@ -1,5 +1,9 @@
 # NetBox Role
 
+> **Legacy compact stack only.** This role does not model the official NetBox
+> production topology currently running on Infraforge. Do not target production
+> without the explicit compact-stack confirmation and a reviewed migration plan.
+
 Deploys [NetBox](https://github.com/netbox-community/netbox) using Docker Compose.
 
 ## Variables
