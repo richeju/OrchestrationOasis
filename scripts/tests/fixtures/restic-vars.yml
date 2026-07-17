@@ -32,3 +32,20 @@ restic_openbao_ca_file: /tmp/test-ca.crt
 restic_openbao_approle_file: /tmp/test-approle.json
 restic_semaphore_backup_enabled: true
 restic_semaphore_database_path: /tmp/test-semaphore.db
+restic_hermes_backup_enabled: true
+restic_hermes_user: test-hermes
+restic_hermes_home: /tmp/test-hermes
+restic_hermes_gateway_service: test-hermes-gateway.service
+restic_hermes_restore_script_path: /tmp/test-hermes-restore.sh
+restic_hermes_state_database_path: /tmp/test-hermes/state.db
+restic_hermes_kanban_database_path: /tmp/test-hermes/kanban.db
+restic_hermes_archive_entries:
+  - .env
+  - config.yaml
+  - auth.json
+  - SOUL.md
+  - memories
+  - skills
+  - cron
+  - sessions
+  - whatsapp/session

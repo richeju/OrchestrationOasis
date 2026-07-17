@@ -34,6 +34,30 @@ restic_openbao_approle_file: /root/.config/openbao/backup-approle.json
 
 restic_semaphore_backup_enabled: false
 restic_semaphore_database_path: /home/debian/.semaphore/semaphore.db
+
+restic_hermes_backup_enabled: false
+restic_hermes_user: debian
+restic_hermes_home: /home/debian/.hermes
+restic_hermes_gateway_service: hermes-gateway.service
+restic_hermes_restore_script_path: /usr/local/sbin/infraforge-hermes-restore.sh
+restic_hermes_state_database_path: "{{ restic_hermes_home }}/state.db"
+restic_hermes_kanban_database_path: "{{ restic_hermes_home }}/kanban.db"
+restic_hermes_archive_entries:
+  - .env
+  - config.yaml
+  - auth.json
+  - SOUL.md
+  - memories
+  - skills
+  - cron
+  - sessions
+  - whatsapp/session
+  - hooks
+  - scripts
+  - pairing
+  - platforms
+  - channel_directory.json
+  - gateway_state.json
 restic_service_path: /etc/systemd/system/infraforge-backup.service
 restic_timer_path: /etc/systemd/system/infraforge-backup.timer
 restic_backup_host: "{{ ansible_facts['hostname'] | default(inventory_hostname) }}"

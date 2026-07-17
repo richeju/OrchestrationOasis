@@ -35,6 +35,7 @@ for key in (
     "restic_authentik_backup_enabled",
     "restic_openbao_backup_enabled",
     "restic_semaphore_backup_enabled",
+    "restic_hermes_backup_enabled",
 ):
     assert config[key] is True
 PY
@@ -79,9 +80,19 @@ ansible-playbook \
   --inventory "$localhost_inventory" \
   "$repo_root/scripts/tests/fixtures/test-restic-validation.yml" >/dev/null
 
+set +e
+overlap_output=$(ansible-playbook \
+  --inventory "$localhost_inventory" \
+  "$repo_root/scripts/tests/fixtures/test-restic-overlap-validation.yml" 2>&1)
+overlap_status=$?
+set -e
+[[ $overlap_status -ne 0 ]]
+grep -F 'unique, non-overlapping Hermes managed paths' <<< "$overlap_output" >/dev/null
+
 bash -n "$output_dir/restic-backup.sh"
 bash -n "$output_dir/restic-backup-audit.sh"
 bash -n "$output_dir/restic-application-backup.sh"
+bash -n "$output_dir/restic-hermes-restore.sh"
 PYTHONPYCACHEPREFIX="$pycache_dir" \
   python3 -m py_compile "$repo_root/scripts/provision-openbao-backup-approle.py"
 PYTHONPYCACHEPREFIX="$pycache_dir" \
@@ -102,6 +113,56 @@ grep -F 'requires the parent backup lock' "$output_dir/restic-application-backup
 grep -F 'docker stop --time 60' "$output_dir/restic-application-backup.sh" >/dev/null
 grep -F 'docker volume inspect netbox-media-test' "$output_dir/restic-application-backup.sh" >/dev/null
 grep -F 'restart_netbox_writers' "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F 'hermes-state.sqlite3' "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F 'hermes-kanban.sqlite3' "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F 'hermes-files.tar' "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F 'shutil.copy2(source_path, stable_source)' \
+  "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F 'source_companion = pathlib.Path' \
+  "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F 'systemctl --user --machine=test-hermes@.host \' \
+  "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F 'stop test-hermes-gateway.service' \
+  "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F 'restart_hermes_gateway' "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F 'Cannot prove a safe Hermes gateway state' \
+  "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F 'hermes_gateway_is_quiescent' \
+  "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F 'MainPID' \
+  "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F 'ControlPID' \
+  "$output_dir/restic-application-backup.sh" >/dev/null
+grep -F 'PRAGMA integrity_check' "$output_dir/restic-hermes-restore.sh" >/dev/null
+grep -F '"snapshots", "--host", BACKUP_HOST, "--json"' \
+  "$output_dir/restic-backup-audit.sh" >/dev/null
+grep -F 'Refusing to restore while the Hermes gateway is active' \
+  "$output_dir/restic-hermes-restore.sh" >/dev/null || \
+  grep -F 'Refusing production restore without proven quiescent gateway' \
+    "$output_dir/restic-hermes-restore.sh" >/dev/null
+grep -F 'os.lstat(raw_target)' "$output_dir/restic-hermes-restore.sh" >/dev/null
+grep -F 'not a symlink' "$output_dir/restic-hermes-restore.sh" >/dev/null
+grep -F 'canonical_paths=' "$output_dir/restic-hermes-restore.sh" >/dev/null
+grep -F 'expected_device' "$output_dir/restic-hermes-restore.sh" >/dev/null
+grep -F 'os.O_NOFOLLOW' "$output_dir/restic-hermes-restore.sh" >/dev/null
+grep -F 'src_dir_fd=source_parent' "$output_dir/restic-hermes-restore.sh" >/dev/null
+grep -F 'dst_dir_fd=destination_parent' "$output_dir/restic-hermes-restore.sh" >/dev/null
+grep -F 'journaled_rename' "$output_dir/restic-hermes-restore.sh" >/dev/null
+grep -F 'signal.pthread_sigmask' "$output_dir/restic-hermes-restore.sh" >/dev/null
+grep -F 'Hermes restore generation must be an absolute canonical path' \
+  "$output_dir/restic-hermes-restore.sh" >/dev/null
+grep -F 'Generation ancestors must be root-owned and non-writable' \
+  "$output_dir/restic-hermes-restore.sh" >/dev/null
+grep -F 'Overlapping managed Hermes paths are forbidden' \
+  "$output_dir/restic-hermes-restore.sh" >/dev/null
+grep -F '.ROLLBACK_SAFE_TO_CLEAN' "$output_dir/restic-hermes-restore.sh" >/dev/null
+grep -F 'state.db-wal' "$output_dir/restic-hermes-restore.sh" >/dev/null
+grep -F 'rollback_path' "$output_dir/restic-hermes-restore.sh" >/dev/null
+if grep -F 'rm -rf -- "$target_home/' "$output_dir/restic-hermes-restore.sh" >/dev/null; then
+  printf 'Path-based recursive deletion found in Hermes restore transaction.\n' >&2
+  exit 1
+fi
+grep -F 'whatsapp/session/creds.json' "$output_dir/restic-hermes-restore.sh" >/dev/null
 grep -F 'kernel/random/uuid' "$output_dir/restic-application-backup.sh" >/dev/null
 
 systemd-analyze verify \

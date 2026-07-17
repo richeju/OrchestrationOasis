@@ -1,0 +1,607 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+if [[ $EUID -ne 0 ]]; then
+  printf 'Hermes restore must run as root.\n' >&2
+  exit 1
+fi
+
+if (( $# < 1 || $# > 2 )); then
+  printf 'Usage: %s GENERATION_DIRECTORY [TARGET_HERMES_HOME]\n' "$0" >&2
+  exit 2
+fi
+
+generation=${1%/}
+target_home=${2:-{{ restic_hermes_home | quote }}}
+production_home={{ restic_hermes_home | quote }}
+hermes_user={{ restic_hermes_user | quote }}
+hermes_service={{ restic_hermes_gateway_service | quote }}
+restore_stage=
+rollback_stage=
+managed_entries=(
+{% for entry in restic_hermes_archive_entries %}
+  {{ entry | quote }}
+{% endfor %}
+  state.db
+  state.db-wal
+  state.db-shm
+  kanban.db
+  kanban.db-wal
+  kanban.db-shm
+)
+
+{% raw %}
+safe_remove_temporary_tree() {
+  python3 - "$1" "$2" <<'PY'
+import os
+import pathlib
+import stat
+import sys
+
+path = pathlib.Path(sys.argv[1])
+require_marker = sys.argv[2] == "rollback"
+if not path.is_absolute() or not path.name:
+    raise RuntimeError("Unsafe temporary restore path")
+
+def open_absolute_dir(directory):
+    fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        for component in directory.parts[1:]:
+            next_fd = os.open(
+                component,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                dir_fd=fd,
+            )
+            os.close(fd)
+            fd = next_fd
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+def empty_tree(fd):
+    for name in os.listdir(fd):
+        info = os.stat(name, dir_fd=fd, follow_symlinks=False)
+        if stat.S_ISDIR(info.st_mode) and not stat.S_ISLNK(info.st_mode):
+            child = os.open(
+                name,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                dir_fd=fd,
+            )
+            try:
+                empty_tree(child)
+            finally:
+                os.close(child)
+            os.rmdir(name, dir_fd=fd)
+        else:
+            os.unlink(name, dir_fd=fd)
+
+parent_fd = open_absolute_dir(path.parent)
+try:
+    try:
+        tree_fd = os.open(
+            path.name,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+            dir_fd=parent_fd,
+        )
+    except FileNotFoundError:
+        raise SystemExit(0)
+    try:
+        info = os.fstat(tree_fd)
+        if info.st_uid != 0 or stat.S_IMODE(info.st_mode) & 0o077:
+            raise RuntimeError(f"Refusing unsafe temporary tree: {path}")
+        names = os.listdir(tree_fd)
+        if require_marker and ".ROLLBACK_SAFE_TO_CLEAN" not in names and names:
+            print(f"Preserving rollback evidence after incomplete recovery: {path}", file=sys.stderr)
+            raise SystemExit(0)
+        empty_tree(tree_fd)
+        current = os.stat(path.name, dir_fd=parent_fd, follow_symlinks=False)
+        if (current.st_dev, current.st_ino) == (info.st_dev, info.st_ino):
+            os.rmdir(path.name, dir_fd=parent_fd)
+    finally:
+        os.close(tree_fd)
+finally:
+    os.close(parent_fd)
+PY
+}
+
+cleanup() {
+  local rc=$?
+  trap - EXIT INT TERM HUP
+  if [[ -n $restore_stage ]]; then
+    safe_remove_temporary_tree "$restore_stage" stage || true
+  fi
+  if [[ -n $rollback_stage ]]; then
+    safe_remove_temporary_tree "$rollback_stage" rollback || true
+  fi
+  exit "$rc"
+}
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+read_gateway_state() {
+  local user=$1
+  local service=$2
+  local output
+  local key
+  local value
+  output=$(systemctl --user --machine="$user@.host" show "$service" \
+    --property=LoadState --property=ActiveState --property=SubState \
+    --property=MainPID --property=ControlPID) || return 1
+  gateway_load_state=
+  gateway_active_state=
+  gateway_sub_state=
+  gateway_main_pid=
+  gateway_control_pid=
+  while IFS='=' read -r key value; do
+    case "$key" in
+      LoadState) gateway_load_state=$value ;;
+      ActiveState) gateway_active_state=$value ;;
+      SubState) gateway_sub_state=$value ;;
+      MainPID) gateway_main_pid=$value ;;
+      ControlPID) gateway_control_pid=$value ;;
+    esac
+  done <<< "$output"
+  [[ $gateway_load_state == loaded &&
+     $gateway_main_pid =~ ^[0-9]+$ &&
+     $gateway_control_pid =~ ^[0-9]+$ ]]
+}
+
+gateway_is_quiescent() {
+  [[ ( $gateway_active_state == inactive || $gateway_active_state == failed ) &&
+     $gateway_main_pid == 0 && $gateway_control_pid == 0 ]]
+}
+{% endraw %}
+
+python3 - "$generation" <<'PY'
+import os
+import pathlib
+import re
+import stat
+import sys
+
+generation = pathlib.Path(sys.argv[1])
+if not generation.is_absolute() or generation.resolve(strict=True) != generation:
+    raise RuntimeError("Hermes restore generation must be an absolute canonical path")
+current = pathlib.Path("/")
+for component in generation.parts[1:]:
+    current = current / component
+    info = os.lstat(current)
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+        raise RuntimeError(f"Unsafe generation ancestor: {current}")
+    if info.st_uid != 0 or stat.S_IMODE(info.st_mode) & 0o022:
+        raise RuntimeError(f"Generation ancestors must be root-owned and non-writable: {current}")
+for control_name in ("COMPLETE", "SHA256SUMS"):
+    info = os.lstat(generation / control_name)
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or stat.S_IMODE(info.st_mode) & 0o022:
+        raise RuntimeError(f"Unsafe generation control file: {control_name}")
+checksum_pattern = re.compile(r"^([0-9a-f]{64}) ([ *])(.+)$")
+for line in (generation / "SHA256SUMS").read_text().splitlines():
+    match = checksum_pattern.fullmatch(line)
+    if not match:
+        raise RuntimeError("Malformed SHA256SUMS entry")
+    name = match.group(3)
+    if pathlib.PurePosixPath(name).name != name or name in {".", ".."}:
+        raise RuntimeError(f"Unsafe checksum filename: {name}")
+    info = os.lstat(generation / name)
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or stat.S_IMODE(info.st_mode) & 0o022:
+        raise RuntimeError(f"Unsafe generation artifact: {name}")
+PY
+
+if [[ ! -f $generation/COMPLETE || ! -f $generation/SHA256SUMS ]]; then
+  printf 'Refusing an incomplete application-backup generation.\n' >&2
+  exit 1
+fi
+for artifact in hermes-state.sqlite3 hermes-kanban.sqlite3 hermes-files.tar; do
+  if [[ ! -f $generation/$artifact ]]; then
+    printf 'Missing Hermes restore artifact: %s\n' "$artifact" >&2
+    exit 1
+  fi
+done
+(
+  cd "$generation"
+  sha256sum --check --strict SHA256SUMS
+)
+
+canonical_paths=$(python3 - "$target_home" "$production_home" <<'PY'
+import os
+import pathlib
+import stat
+import sys
+
+raw_target = pathlib.Path(sys.argv[1])
+raw_production = pathlib.Path(sys.argv[2])
+if not raw_target.is_absolute():
+    raise RuntimeError("Hermes restore target must be an absolute path")
+resolved_parent = raw_target.parent.resolve(strict=True)
+if resolved_parent != raw_target.parent:
+    raise RuntimeError("Hermes restore target parent must not contain symlinks")
+try:
+    mode = os.lstat(raw_target).st_mode
+except FileNotFoundError as error:
+    raise RuntimeError("Hermes restore target must already exist") from error
+else:
+    if stat.S_ISLNK(mode) or not stat.S_ISDIR(mode):
+        raise RuntimeError("Hermes restore target must be a real directory, not a symlink")
+    target = raw_target.resolve(strict=True)
+    target_info = os.stat(raw_target, follow_symlinks=False)
+    expected_device = str(target_info.st_dev)
+    expected_inode = str(target_info.st_ino)
+production = raw_production.resolve(strict=True)
+if target == pathlib.Path("/"):
+    raise RuntimeError("Hermes restore target must be a non-root path")
+print(f"{target}\t{production}\t{expected_device}\t{expected_inode}")
+PY
+)
+IFS=$'\t' read -r target_home production_home target_device target_inode <<< "$canonical_paths"
+if [[ -z $target_home || -z $production_home || -z $target_device || -z $target_inode ]]; then
+  printf 'Failed to canonicalize Hermes restore paths.\n' >&2
+  exit 1
+fi
+
+if [[ $target_home == "$production_home" ]]; then
+  if ! read_gateway_state "$hermes_user" "$hermes_service" || ! gateway_is_quiescent; then
+    printf 'Refusing production restore without proven quiescent gateway: %s/%s main=%s control=%s.\n' \
+      "${gateway_active_state:-unknown}" "${gateway_sub_state:-unknown}" \
+      "${gateway_main_pid:-unknown}" "${gateway_control_pid:-unknown}" >&2
+    exit 1
+  fi
+fi
+
+restore_stage=$(mktemp -d "/var/tmp/.hermes-restore.XXXXXX")
+rollback_stage=$(mktemp -d "/var/tmp/.hermes-rollback.XXXXXX")
+install -d -m 0700 -- "$restore_stage/files"
+
+python3 - \
+  "$generation/hermes-state.sqlite3" \
+  "$generation/hermes-kanban.sqlite3" \
+  "$generation/hermes-files.tar" \
+  "$restore_stage/files" <<'PY'
+import pathlib
+import sqlite3
+import sys
+import tarfile
+
+state_db, kanban_db, archive_path, restore_stage = sys.argv[1:]
+for database in (state_db, kanban_db):
+    connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+    try:
+        result = connection.execute("PRAGMA integrity_check").fetchone()
+        if result != ("ok",):
+            raise RuntimeError(f"SQLite integrity check failed: {database}: {result!r}")
+    finally:
+        connection.close()
+
+required = {
+    ".env",
+    "config.yaml",
+    "auth.json",
+    "memories/MEMORY.md",
+    "memories/USER.md",
+    "whatsapp/session/creds.json",
+}
+with tarfile.open(archive_path, "r:") as archive:
+    names = set()
+    for member in archive.getmembers():
+        path = pathlib.PurePosixPath(member.name)
+        if path.is_absolute() or ".." in path.parts:
+            raise RuntimeError(f"Unsafe archive path: {member.name}")
+        if not (member.isfile() or member.isdir()):
+            raise RuntimeError(f"Unsupported archive member: {member.name}")
+        normalized = member.name.removeprefix("./").rstrip("/")
+        if normalized in names:
+            raise RuntimeError(f"Duplicate archive member: {normalized}")
+        names.add(normalized)
+    missing = required - names
+    if missing:
+        raise RuntimeError(f"Hermes archive is incomplete: {sorted(missing)}")
+    archive.extractall(restore_stage, filter="data")
+PY
+
+install -o "$hermes_user" -g "$hermes_user" -m 0600 \
+  "$generation/hermes-state.sqlite3" "$restore_stage/files/state.db"
+install -o "$hermes_user" -g "$hermes_user" -m 0600 \
+  "$generation/hermes-kanban.sqlite3" "$restore_stage/files/kanban.db"
+chown -R "$hermes_user:$hermes_user" -- "$restore_stage/files"
+chown root:root -- "$restore_stage/files"
+chmod 0700 -- "$restore_stage/files"
+
+python3 - \
+  "$target_home" \
+  "$restore_stage/files" \
+  "$rollback_stage" \
+  "$hermes_user" \
+  "$target_device" \
+  "$target_inode" \
+  "${managed_entries[@]}" <<'PY'
+import os
+import pathlib
+import pwd
+import signal
+import sqlite3
+import stat
+import sys
+import time
+
+target_path = pathlib.Path(sys.argv[1])
+stage_path = pathlib.Path(sys.argv[2])
+rollback_path = pathlib.Path(sys.argv[3])
+account = pwd.getpwnam(sys.argv[4])
+expected_device = sys.argv[5]
+expected_inode = sys.argv[6]
+entries = [pathlib.PurePosixPath(value) for value in sys.argv[7:]]
+test_pause_after_rename = float(
+    os.environ.get("INFRAFORGE_HERMES_RESTORE_TEST_PAUSE_AFTER_RENAME", "0")
+)
+test_stop_after_rename = (
+    os.environ.get("INFRAFORGE_HERMES_RESTORE_TEST_STOP_AFTER_RENAME", "0") == "1"
+)
+if not 0 <= test_pause_after_rename <= 30:
+    raise RuntimeError("Invalid restore test pause")
+for entry in entries:
+    if entry.is_absolute() or ".." in entry.parts or not entry.parts:
+        raise RuntimeError(f"Unsafe managed Hermes path: {entry}")
+entry_strings = [entry.as_posix() for entry in entries]
+if len(entry_strings) != len(set(entry_strings)):
+    raise RuntimeError("Duplicate managed Hermes paths are forbidden")
+for parent in entries:
+    for child in entries:
+        if parent != child and child.parts[: len(parent.parts)] == parent.parts:
+            raise RuntimeError(f"Overlapping managed Hermes paths are forbidden: {parent}, {child}")
+
+OPEN_DIR = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+
+class SignalAbort(RuntimeError):
+    def __init__(self, signum):
+        super().__init__(f"Restore interrupted by signal {signum}")
+        self.exit_code = 128 + signum
+
+def on_signal(signum, _frame):
+    raise SignalAbort(signum)
+
+HANDLED_SIGNALS = {signal.SIGHUP, signal.SIGINT, signal.SIGTERM}
+for handled_signal in HANDLED_SIGNALS:
+    signal.signal(handled_signal, on_signal)
+
+def open_absolute_dir(path):
+    fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        for component in path.parts[1:]:
+            next_fd = os.open(component, OPEN_DIR, dir_fd=fd)
+            os.close(fd)
+            fd = next_fd
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+def open_named_root(path, *, require_root_owner=False):
+    parent_fd = open_absolute_dir(path.parent)
+    try:
+        fd = os.open(path.name, OPEN_DIR, dir_fd=parent_fd)
+    except BaseException:
+        os.close(parent_fd)
+        raise
+    info = os.fstat(fd)
+    if require_root_owner and (info.st_uid != 0 or stat.S_IMODE(info.st_mode) & 0o077):
+        os.close(fd)
+        os.close(parent_fd)
+        raise RuntimeError(f"Unsafe temporary restore directory: {path}")
+    return parent_fd, fd, info
+
+class StableTree:
+    def __init__(self, root_fd, owner_uid, owner_gid):
+        self.root_fd = root_fd
+        self.owner_uid = owner_uid
+        self.owner_gid = owner_gid
+        self.cache = {(): root_fd}
+        self.opened = []
+        self.created = []
+
+    def parent(self, parts, *, create=False):
+        key = ()
+        current = self.root_fd
+        for component in parts:
+            key = key + (component,)
+            if key in self.cache:
+                current = self.cache[key]
+                continue
+            if create:
+                try:
+                    os.mkdir(component, 0o700, dir_fd=current)
+                    os.chown(
+                        component,
+                        self.owner_uid,
+                        self.owner_gid,
+                        dir_fd=current,
+                        follow_symlinks=False,
+                    )
+                    self.created.append(key)
+                except FileExistsError:
+                    pass
+            next_fd = os.open(component, OPEN_DIR, dir_fd=current)
+            self.cache[key] = next_fd
+            self.opened.append(next_fd)
+            current = next_fd
+        return current
+
+    def close(self):
+        for fd in reversed(self.opened):
+            os.close(fd)
+
+def exists(parent_fd, name):
+    try:
+        os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return False
+    return True
+
+def journaled_rename(journal, journal_entry, leaf, source_parent, destination_parent):
+    previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, HANDLED_SIGNALS)
+    journal.append(journal_entry)
+    try:
+        os.rename(
+            leaf,
+            leaf,
+            src_dir_fd=source_parent,
+            dst_dir_fd=destination_parent,
+        )
+    except BaseException:
+        journal.pop()
+        raise
+    finally:
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+
+def remove_entry(parent_fd, name):
+    try:
+        info = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    if stat.S_ISDIR(info.st_mode) and not stat.S_ISLNK(info.st_mode):
+        child_fd = os.open(name, OPEN_DIR, dir_fd=parent_fd)
+        try:
+            for child_name in os.listdir(child_fd):
+                remove_entry(child_fd, child_name)
+        finally:
+            os.close(child_fd)
+        os.rmdir(name, dir_fd=parent_fd)
+    else:
+        os.unlink(name, dir_fd=parent_fd)
+
+def mark_rollback_safe(rollback_fd):
+    marker_fd = os.open(
+        ".ROLLBACK_SAFE_TO_CLEAN",
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC,
+        0o600,
+        dir_fd=rollback_fd,
+    )
+    os.close(marker_fd)
+
+def verify_database(target_tree, name):
+    parent_fd = target_tree.parent(())
+    database_fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=parent_fd)
+    try:
+        connection = sqlite3.connect(
+            f"file:/proc/self/fd/{database_fd}?mode=ro&immutable=1",
+            uri=True,
+        )
+        try:
+            result = connection.execute("PRAGMA integrity_check").fetchone()
+            if result != ("ok",):
+                raise RuntimeError(f"Restored SQLite integrity check failed: {name}")
+        finally:
+            connection.close()
+    finally:
+        os.close(database_fd)
+
+target_parent_fd, target_fd, target_info = open_named_root(target_path)
+stage_parent_fd, stage_fd, stage_info = open_named_root(stage_path, require_root_owner=True)
+rollback_parent_fd, rollback_fd, rollback_info = open_named_root(
+    rollback_path,
+    require_root_owner=True,
+)
+if expected_device != "-" and (
+    target_info.st_dev != int(expected_device) or target_info.st_ino != int(expected_inode)
+):
+    raise RuntimeError("Hermes restore target changed after validation")
+if stage_info.st_dev != target_info.st_dev or rollback_info.st_dev != target_info.st_dev:
+    raise RuntimeError("Hermes staging and target must use the same filesystem")
+
+target_tree = StableTree(target_fd, account.pw_uid, account.pw_gid)
+stage_tree = StableTree(stage_fd, 0, 0)
+rollback_tree = StableTree(rollback_fd, 0, 0)
+moved_existing = []
+installed = []
+transaction_committed = False
+try:
+    for entry in entries:
+        parts = entry.parts
+        target_parent = target_tree.parent(parts[:-1], create=True)
+        rollback_parent = rollback_tree.parent(parts[:-1], create=True)
+        stage_parent = stage_tree.parent(parts[:-1])
+        leaf = parts[-1]
+        if exists(target_parent, leaf):
+            journaled_rename(
+                moved_existing,
+                (entry, target_parent, rollback_parent),
+                leaf,
+                target_parent,
+                rollback_parent,
+            )
+            if test_stop_after_rename:
+                os.kill(os.getpid(), signal.SIGSTOP)
+            if test_pause_after_rename:
+                time.sleep(test_pause_after_rename)
+        if exists(stage_parent, leaf):
+            journaled_rename(
+                installed,
+                (entry, target_parent),
+                leaf,
+                stage_parent,
+                target_parent,
+            )
+
+    verify_database(target_tree, "state.db")
+    verify_database(target_tree, "kanban.db")
+    current_target = os.stat(
+        target_path.name,
+        dir_fd=target_parent_fd,
+        follow_symlinks=False,
+    )
+    if (current_target.st_dev, current_target.st_ino) != (
+        target_info.st_dev,
+        target_info.st_ino,
+    ):
+        raise RuntimeError("Hermes restore target was replaced during transaction")
+    mark_rollback_safe(rollback_fd)
+    transaction_committed = True
+except BaseException as error:
+    rollback_errors = []
+    for entry, target_parent in reversed(installed):
+        try:
+            remove_entry(target_parent, entry.parts[-1])
+        except BaseException as rollback_error:
+            rollback_errors.append(rollback_error)
+    for entry, target_parent, rollback_parent in reversed(moved_existing):
+        try:
+            leaf = entry.parts[-1]
+            if exists(rollback_parent, leaf):
+                remove_entry(target_parent, leaf)
+                os.rename(leaf, leaf, src_dir_fd=rollback_parent, dst_dir_fd=target_parent)
+        except BaseException as rollback_error:
+            rollback_errors.append(rollback_error)
+    for created in reversed(target_tree.created):
+        try:
+            parent = target_tree.parent(created[:-1])
+            os.rmdir(created[-1], dir_fd=parent)
+        except OSError:
+            pass
+    if not rollback_errors:
+        mark_rollback_safe(rollback_fd)
+    else:
+        raise RuntimeError(
+            f"Hermes rollback incomplete; preserved at {rollback_path}: {rollback_errors!r}"
+        ) from error
+    if isinstance(error, SignalAbort):
+        raise SystemExit(error.exit_code) from error
+    raise
+finally:
+    target_tree.close()
+    stage_tree.close()
+    rollback_tree.close()
+    os.close(target_fd)
+    os.close(target_parent_fd)
+    os.close(stage_fd)
+    os.close(stage_parent_fd)
+    os.close(rollback_fd)
+    os.close(rollback_parent_fd)
+
+if not transaction_committed:
+    raise RuntimeError("Hermes restore transaction did not commit")
+PY
+
+printf 'Hermes data restored successfully into %s.\n' "$target_home"
+printf 'Run hermes doctor, then start %s for user %s.\n' "$hermes_service" "$hermes_user"

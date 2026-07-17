@@ -20,6 +20,16 @@
       enabled: "{{ restic_openbao_backup_enabled }}"
     - path: "{{ restic_openbao_approle_file }}"
       enabled: "{{ restic_openbao_backup_enabled }}"
+    - path: "{{ restic_hermes_state_database_path }}"
+      enabled: "{{ restic_hermes_backup_enabled }}"
+    - path: "{{ restic_hermes_kanban_database_path }}"
+      enabled: "{{ restic_hermes_backup_enabled }}"
+    - path: "{{ restic_hermes_home }}/config.yaml"
+      enabled: "{{ restic_hermes_backup_enabled }}"
+    - path: "{{ restic_hermes_home }}/.env"
+      enabled: "{{ restic_hermes_backup_enabled }}"
+    - path: "{{ restic_hermes_home }}/auth.json"
+      enabled: "{{ restic_hermes_backup_enabled }}"
   when: item.enabled | bool
   register: restic_application_source_files
   no_log: true
@@ -93,6 +103,20 @@
   changed_when: false
   check_mode: false
 
+- name: Verify Hermes gateway is active
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --user
+      - "--machine={{ restic_hermes_user }}@.host"
+      - is-active
+      - "{{ restic_hermes_gateway_service }}"
+  when: restic_hermes_backup_enabled | bool
+  register: restic_hermes_gateway
+  changed_when: false
+  failed_when: restic_hermes_gateway.rc != 0 or restic_hermes_gateway.stdout | trim != 'active'
+  check_mode: false
+
 - name: Install application-backup preparation script
   ansible.builtin.template:
     src: restic-application-backup.sh.j2
@@ -110,3 +134,23 @@
       - "{{ restic_application_backup_script_path }}"
   changed_when: false
   when: not ansible_check_mode
+
+- name: Install Hermes restore script
+  ansible.builtin.template:
+    src: restic-hermes-restore.sh.j2
+    dest: "{{ restic_hermes_restore_script_path }}"
+    owner: root
+    group: root
+    mode: '0700'
+  when: restic_hermes_backup_enabled | bool
+
+- name: Validate Hermes restore script
+  ansible.builtin.command:
+    argv:
+      - bash
+      - -n
+      - "{{ restic_hermes_restore_script_path }}"
+  changed_when: false
+  when:
+    - restic_hermes_backup_enabled | bool
+    - not ansible_check_mode

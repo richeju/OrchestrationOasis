@@ -20,6 +20,7 @@ import subprocess
 
 SERVICE = {{ (restic_backup_name ~ '.service') | to_json }}
 TIMER = {{ (restic_backup_name ~ '.timer') | to_json }}
+BACKUP_HOST = {{ restic_backup_host | to_json }}
 
 
 def run(command):
@@ -47,7 +48,9 @@ service = systemd_properties(
      "ExecMainStatus", "ActiveState", "SubState"],
 )
 timer = systemd_properties(TIMER, ["NextElapseUSecRealtime", "LastTriggerUSec"])
-snapshots = json.loads(run_ok(["restic", "--no-cache", "snapshots", "--json"]))
+snapshots = json.loads(run_ok([
+    "restic", "--no-cache", "snapshots", "--host", BACKUP_HOST, "--json",
+]))
 latest = snapshots[-1] if snapshots else None
 latest_time = latest["time"] if latest else None
 application_complete = None
