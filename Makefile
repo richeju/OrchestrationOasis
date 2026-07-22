@@ -28,6 +28,7 @@ test:
 	./scripts/tests/markdown-links.test.sh
 	./scripts/tests/safety-gates.test.sh
 	./scripts/tests/repository-safety.test.sh
+	./scripts/tests/container-patching.test.sh
 	./scripts/tests/service-roles.test.sh
 	./scripts/tests/hermes-role.test.sh
 	./scripts/tests/restic-role.test.sh
