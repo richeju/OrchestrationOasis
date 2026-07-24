@@ -28,6 +28,7 @@ test:
 	./scripts/tests/markdown-links.test.sh
 	./scripts/tests/safety-gates.test.sh
 	./scripts/tests/repository-safety.test.sh
+	python3 ./scripts/tests/daily-security-audit.test.py
 	./scripts/tests/container-patching.test.sh
 	./scripts/tests/service-roles.test.sh
 	./scripts/tests/hermes-role.test.sh

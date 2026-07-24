@@ -3,7 +3,7 @@
 This page is the canonical boundary between observed production state and the
 automation currently owned by this repository. It contains no credentials.
 
-Last verified: 2026-07-17 from the Infraforge VPS.
+Last verified: 2026-07-22 from the Infraforge VPS.
 
 ## Status vocabulary
 
@@ -25,8 +25,8 @@ Last verified: 2026-07-17 from the Infraforge VPS.
 | Caddy | Native systemd service; Authentik reverse proxy | VPN HTTP `10.78.0.1:80` | Observed only |
 | Semaphore | Docker Compose in `/home/debian/semaphore` | VPN `10.78.0.1:3001` | Migrated and managed |
 | OpenBao | Docker Compose in `/home/debian/openbao` | VPN TLS `10.78.0.1:8200` | Partial; automated Raft snapshots are managed, isolated full restore remains |
-| Restic/rclone | Native root-only scripts, application-consistent export hook and systemd timers | No listening port | Degraded; the 2026-07-17 daily run failed while proving Hermes quiescence |
-| Hermes Agent | Per-user Python installation and user systemd messaging gateway | Outbound WhatsApp gateway | Partial; live role settings verified, second-convergence and reliable backup proof pending |
+| Restic/rclone | Native root-only scripts, application-consistent export hook and systemd timers | No listening port | Managed backup pipeline; latest read-only audit healthy, full disposable offsite restore automation remains backlog |
+| Hermes Agent | Per-user Python installation and user systemd messaging gateway | Outbound WhatsApp gateway | Partial; live role and application-consistent backup/transaction safeguards verified, second-convergence proof remains pending |
 | NetBox | Official netbox-docker stack in `/home/debian/netbox`, including worker, PostgreSQL and Valkey | VPN `10.78.0.1:8000` | Observed only |
 | Authentik | Docker Compose in `/home/debian/authentik` | VPN `10.78.0.1:9000` | Observed only |
 | Prometheus | Not detected | None | Planned |
@@ -53,6 +53,15 @@ repository health without changing the host.
 Semaphore must use the inventory shape documented in
 `ansible/inventories/semaphore-vps.example.yml`; the host remains a member of
 both `infraforge_vps` and the broader `linux` group.
+
+The daily WhatsApp security report uses the deterministic, versioned collector
+documented in [`daily-security-audit.md`](daily-security-audit.md). Its
+2026-07-22 production run completed without collection errors and verified a
+restrictive UFW posture, only SSH and OpenVPN on public listeners, healthy
+private service probes, initialized/unsealed OpenBao, and a healthy Restic
+snapshot with no lock and a complete application export. The host had no
+pending package updates but did report that a reboot was required; no reboot
+was performed by the audit.
 
 ## Change rule
 
