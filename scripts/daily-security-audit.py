@@ -4,14 +4,20 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import hmac
+import http.client
 import ipaddress
 import json
 import os
 import re
+import signal
 import shutil
 import ssl
 import subprocess
+import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,6 +37,9 @@ DEFAULT_VPN_TARGETS = (
 KNOWN_SSIDS = {"Gods", "Enligne Wireless"}
 NON_SERVICE_WILDCARD_LISTENERS = {("udp", "68"), ("udp", "546")}
 MAX_OUTPUT_BYTES = 1_000_000
+DEFAULT_UNIFI_CERT_SHA256 = (
+    "8fb4fdfc9b329247052c80077adb51fc3754fe09c389af8aeca75d648b32cae4"
+)
 
 
 @dataclass(frozen=True)
@@ -46,21 +55,74 @@ def run_command(
 ) -> CommandResult:
     command = ["sudo", "-n", *argv] if sudo else list(argv)
     try:
-        process = subprocess.run(
+        process = subprocess.Popen(
             command,
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=timeout,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
         )
-    except (subprocess.TimeoutExpired, OSError) as exc:
-        return CommandResult(124, "", "", f"{type(exc).__name__}: {exc}")
-    stdout = process.stdout[:MAX_OUTPUT_BYTES]
-    stderr = process.stderr[:MAX_OUTPUT_BYTES]
-    error = None
-    if len(process.stdout) > MAX_OUTPUT_BYTES or len(process.stderr) > MAX_OUTPUT_BYTES:
+    except OSError as exc:
+        return CommandResult(127, "", "", type(exc).__name__)
+
+    stdout_buffer = bytearray()
+    stderr_buffer = bytearray()
+    stdout_state = {"truncated": False}
+    stderr_state = {"truncated": False}
+
+    def drain(stream: Any, buffer: bytearray, state: dict[str, bool]) -> None:
+        while True:
+            chunk = stream.read(65536)
+            if not chunk:
+                break
+            remaining = MAX_OUTPUT_BYTES - len(buffer)
+            if remaining > 0:
+                buffer.extend(chunk[:remaining])
+            if len(chunk) > max(remaining, 0):
+                state["truncated"] = True
+
+    threads = [
+        threading.Thread(
+            target=drain,
+            args=(process.stdout, stdout_buffer, stdout_state),
+            daemon=True,
+        ),
+        threading.Thread(
+            target=drain,
+            args=(process.stderr, stderr_buffer, stderr_state),
+            daemon=True,
+        ),
+    ]
+    for thread in threads:
+        thread.start()
+
+    error: str | None = None
+    try:
+        returncode = process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        error = "timeout"
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        returncode = process.wait()
+    for thread in threads:
+        thread.join(timeout=5)
+    if process.stdout is not None:
+        process.stdout.close()
+    if process.stderr is not None:
+        process.stderr.close()
+    if error is None and (stdout_state["truncated"] or stderr_state["truncated"]):
         error = "output_truncated"
-    return CommandResult(process.returncode, stdout, stderr, error)
+
+    stdout = bytes(stdout_buffer).decode("utf-8", errors="replace")
+    stderr = bytes(stderr_buffer).decode("utf-8", errors="replace")
+    return CommandResult(
+        124 if error == "timeout" else returncode,
+        stdout,
+        stderr,
+        error,
+    )
 
 
 def error_record(probe: str, result: CommandResult | Exception | str) -> dict[str, str]:
@@ -124,12 +186,7 @@ def parse_public_listeners(text: str) -> list[dict[str, str]]:
         if not public:
             try:
                 address = ipaddress.ip_address(host.split("%", 1)[0])
-                public = not (
-                    address.is_loopback
-                    or address.is_private
-                    or address.is_link_local
-                    or address.is_unspecified
-                )
+                public = address.is_global
             except ValueError:
                 public = False
         if public:
@@ -231,9 +288,9 @@ def classify_rogues(
             "is_neighbor": bool(row.get("is_neighbor")),
             "known_ssid": (row.get("essid") or row.get("ssid")) in known_ssids,
         }
-        if age_minutes is not None and age_minutes < 15:
+        if age_minutes is not None and 0 <= age_minutes < 15:
             result["active"].append(item)
-        elif age_minutes is not None and age_minutes < 1440:
+        elif age_minutes is not None and 0 <= age_minutes < 1440:
             result["recent"].append(item)
         else:
             result["historical"].append(item)
@@ -268,7 +325,7 @@ def summarize_unifi(
     new_clients = 0
     for client in clients:
         first_seen = epoch_seconds(client.get("first_seen"))
-        if first_seen and now - first_seen < 86400:
+        if first_seen and 0 <= now - first_seen < 86400:
             new_clients += 1
     return {
         "adopted_online": sum(1 for row in adopted if row.get("state") == 1),
@@ -302,19 +359,78 @@ def sanitize_restic(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def normalize_sha256_fingerprint(value: str) -> str:
+    normalized = re.sub(r"[^0-9a-f]", "", value.lower())
+    if not re.fullmatch(r"[0-9a-f]{64}", normalized):
+        raise ValueError("invalid SHA-256 certificate fingerprint")
+    return normalized
+
+
+class PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """HTTPS connection that verifies the peer before sending HTTP bytes."""
+
+    def __init__(self, host: str, port: int, fingerprint: str, timeout: int) -> None:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        super().__init__(host, port=port, timeout=timeout, context=context)
+        self.expected_fingerprint = normalize_sha256_fingerprint(fingerprint)
+
+    def connect(self) -> None:
+        super().connect()
+        if self.sock is None:
+            raise ssl.SSLError("TLS socket unavailable")
+        certificate = self.sock.getpeercert(binary_form=True)
+        if not certificate:
+            self.close()
+            raise ssl.SSLError("UniFi peer certificate unavailable")
+        actual = hashlib.sha256(certificate).hexdigest()
+        if not hmac.compare_digest(actual, self.expected_fingerprint):
+            self.close()
+            raise ssl.SSLError("UniFi certificate fingerprint mismatch")
+
+
 def unifi_get(path: str) -> list[dict[str, Any]]:
     api_key = os.environ.get("UNIFI_API_KEY")
     if not api_key:
         raise RuntimeError("UNIFI_API_KEY is unavailable")
-    base = os.environ.get("UNIFI_HOST", DEFAULT_UNIFI_HOST).rstrip("/")
-    request = urllib.request.Request(
-        f"{base}{path}",
-        headers={"X-API-Key": api_key, "Accept": "application/json"},
+    base = urllib.parse.urlsplit(os.environ.get("UNIFI_HOST", DEFAULT_UNIFI_HOST))
+    if (
+        base.scheme != "https"
+        or not base.hostname
+        or base.username
+        or base.password
+        or base.query
+        or base.fragment
+    ):
+        raise RuntimeError("UNIFI_HOST must be a plain HTTPS origin")
+    fingerprint = os.environ.get("UNIFI_CERT_SHA256", DEFAULT_UNIFI_CERT_SHA256)
+    connection = PinnedHTTPSConnection(
+        base.hostname,
+        base.port or 443,
+        fingerprint,
+        timeout=15,
     )
-    context = ssl._create_unverified_context()
-    with urllib.request.urlopen(request, context=context, timeout=15) as response:
-        body = json.load(response)
-    return body.get("data", [])
+    request_path = f"{base.path.rstrip('/')}{path}"
+    try:
+        connection.request(
+            "GET",
+            request_path,
+            headers={"X-API-Key": api_key, "Accept": "application/json"},
+        )
+        response = connection.getresponse()
+        if response.status != 200:
+            raise RuntimeError(f"UniFi API returned HTTP {response.status}")
+        raw = response.read(MAX_OUTPUT_BYTES + 1)
+        if len(raw) > MAX_OUTPUT_BYTES:
+            raise RuntimeError("UniFi API response exceeds output limit")
+        body = json.loads(raw)
+    finally:
+        connection.close()
+    data = body.get("data", [])
+    if not isinstance(data, list):
+        raise ValueError("UniFi API data is not a list")
+    return data
 
 
 def probe_http(url: str, *, host_header: str | None = None) -> dict[str, Any]:

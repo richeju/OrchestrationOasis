@@ -23,6 +23,8 @@ udp UNCONN 0 0 *:1194 *:*
 udp UNCONN 0 0 0.0.0.0:68 0.0.0.0:*
 tcp LISTEN 0 128 10.78.0.1:8000 0.0.0.0:*
 tcp LISTEN 0 128 127.0.0.1:9001 0.0.0.0:*
+tcp LISTEN 0 128 100.64.0.1:8443 0.0.0.0:*
+tcp LISTEN 0 128 192.0.2.1:9443 0.0.0.0:*
 tcp LISTEN 0 128 213.32.65.233:443 0.0.0.0:*
 """
         self.assertEqual(
@@ -40,11 +42,14 @@ tcp LISTEN 0 128 213.32.65.233:443 0.0.0.0:*
             {"is_rogue": True, "essid": "Gods", "last_seen": now - 60},
             {"is_rogue": True, "essid": "Other", "last_seen": (now - 900) * 1000},
             {"is_rogue": True, "essid": "Old", "last_seen": now - 90_000},
+            {"is_rogue": True, "essid": "Future", "last_seen": now + 300},
         ]
         result = AUDIT.classify_rogues(rows, now=now)
         self.assertEqual([row["ssid"] for row in result["active"]], ["Gods"])
         self.assertEqual([row["ssid"] for row in result["recent"]], ["Other"])
-        self.assertEqual([row["ssid"] for row in result["historical"]], ["Old"])
+        self.assertEqual(
+            [row["ssid"] for row in result["historical"]], ["Old", "Future"]
+        )
         self.assertTrue(result["active"][0]["known_ssid"])
 
     def test_known_ssids_are_derived_from_adopted_radios(self):
@@ -96,6 +101,75 @@ tcp LISTEN 0 128 213.32.65.233:443 0.0.0.0:*
                 "default_outgoing_allow": True,
             },
         )
+
+    def test_run_command_bounds_output_decodes_invalid_bytes_and_times_out(self):
+        noisy = AUDIT.run_command(
+            [
+                sys.executable,
+                "-c",
+                f"import os; os.write(1, b'x' * ({AUDIT.MAX_OUTPUT_BYTES} + 1000))",
+            ],
+            timeout=5,
+        )
+        self.assertEqual(noisy.returncode, 0)
+        self.assertEqual(len(noisy.stdout), AUDIT.MAX_OUTPUT_BYTES)
+        self.assertEqual(noisy.error, "output_truncated")
+
+        invalid = AUDIT.run_command(
+            [sys.executable, "-c", "import os; os.write(1, b'\\xff')"], timeout=5
+        )
+        self.assertEqual(invalid.returncode, 0)
+        self.assertIn("\ufffd", invalid.stdout)
+
+        timed_out = AUDIT.run_command(
+            [sys.executable, "-c", "import time; time.sleep(5)"], timeout=0.05
+        )
+        self.assertEqual(timed_out.returncode, 124)
+        self.assertEqual(timed_out.error, "timeout")
+
+    def test_unifi_tls_pin_and_origin_validation(self):
+        certificate = b"test-certificate"
+        fingerprint = AUDIT.hashlib.sha256(certificate).hexdigest()
+        socket = mock.Mock()
+        socket.getpeercert.return_value = certificate
+
+        def fake_connect(connection):
+            connection.sock = socket
+
+        connection = AUDIT.PinnedHTTPSConnection("controller", 443, fingerprint, 1)
+        with mock.patch.object(
+            AUDIT.http.client.HTTPSConnection, "connect", fake_connect
+        ):
+            connection.connect()
+
+        mismatch = AUDIT.PinnedHTTPSConnection("controller", 443, "0" * 64, 1)
+        with (
+            mock.patch.object(
+                AUDIT.http.client.HTTPSConnection, "connect", fake_connect
+            ),
+            self.assertRaises(AUDIT.ssl.SSLError),
+        ):
+            mismatch.connect()
+
+        with (
+            mock.patch.dict(
+                AUDIT.os.environ,
+                {"UNIFI_API_KEY": "not-emitted", "UNIFI_HOST": "http://controller"},
+                clear=False,
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            AUDIT.unifi_get("/api/test")
+
+    def test_future_unifi_client_is_not_counted_as_new(self):
+        now = 1_800_000_000.0
+        summary = AUDIT.summarize_unifi(
+            [],
+            [{"first_seen": now + 60}],
+            [],
+            now=now,
+        )
+        self.assertEqual(summary["new_clients_24h"], 0)
 
     def test_collect_emits_complete_bounded_schema(self):
         now = dt.datetime(2026, 7, 22, 8, 0, tzinfo=dt.timezone.utc)
