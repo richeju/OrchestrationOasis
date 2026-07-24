@@ -10,9 +10,19 @@ The collector:
 - uses `sudo -n` only for bounded read-only probes;
 - applies an explicit timeout to every subprocess and HTTP request;
 - limits captured command output to 1 MB per stream;
+- drains excess subprocess output without retaining it in memory and replaces invalid UTF-8 safely;
 - emits one JSON document even when one subsystem is unavailable;
 - never emits UniFi API keys, environment variables, raw SSH logs, Restic lock IDs, backup paths, or Restic journal lines;
 - performs no package update, restart, firewall mutation, ban, device adoption, backup, restore, prune, or container deployment.
+
+The UniFi API uses certificate-fingerprint pinning. The TLS handshake and
+SHA-256 fingerprint comparison complete before the HTTP request containing the
+API key is sent, and redirects are not followed. The repository default pins
+the current `CN=unifi.local` certificate, valid until 2028-06-15. A controlled
+certificate rotation can provide `UNIFI_CERT_SHA256`; the new public
+fingerprint must be verified through a trusted administrative path before the
+collector is redeployed. Plain HTTP origins and origins containing credentials
+are rejected.
 
 The root-only `/usr/local/sbin/infraforge-backup-audit.sh` is executed directly through `sudo -n`. That script is the repository-managed, read-only Restic audit already used by `ansible/playbooks/audit_vps.yml`; the collector retains only its health summary.
 
@@ -70,4 +80,8 @@ make check
 make scan
 ```
 
-The unit suite covers public-listener filtering, UFW parsing, UniFi timestamps in seconds and milliseconds, the 15-minute rogue threshold, Restic minimization, and the complete schema with mocked probes.
+The unit suite covers bounded subprocess output, invalid UTF-8, timeouts, TLS
+fingerprint matching/mismatch and origin validation, public-listener filtering
+including shared/reserved ranges, UFW parsing, UniFi timestamps in seconds and
+milliseconds, future timestamps, the 15-minute rogue threshold, Restic
+minimization, and the complete schema with mocked probes.
