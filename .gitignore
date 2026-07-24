@@ -10,6 +10,8 @@ ansible/inventories/production/*.yml
 ansible/inventories/runtime/
 .cache/
 .venv/
+__pycache__/
+*.py[cod]
 *.retry
 .vault_pass
 
