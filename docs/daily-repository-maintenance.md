@@ -21,7 +21,7 @@ All times use `Europe/Paris`:
 - **10:00** — a no-agent cron script starts a bounded transient user-systemd worker;
 - **11:00 and 11:15** — the same no-agent cron script attempts to read and deliver the deterministic terminal result; it stays silent while the worker is active.
 
-The worker has a 50-minute internal timeout. systemd enforces a 55-minute outer limit, kills the full control group, caps memory at 3 GiB, and caps tasks. Only one terminal report is produced; provisional running messages are never emitted, and the implementation does not claim that WhatsApp delivery succeeded merely because the reporter printed output.
+The worker has a 50-minute internal timeout. systemd enforces a 55-minute outer limit, kills the full control group, caps memory at 3 GiB, and caps tasks. The 11:00 attempt is a grace-period probe; 11:15 emits the terminal result, or converts a stale 65-minute `.running` reservation into a single timeout result. Only one terminal report is produced; provisional running messages are never emitted, and the implementation does not claim that WhatsApp delivery succeeded merely because the reporter printed output.
 
 ## Security model
 

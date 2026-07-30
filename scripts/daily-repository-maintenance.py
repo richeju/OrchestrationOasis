@@ -45,6 +45,7 @@ HERMES_DOCKER_IMAGE = (
     "sha256:8f958bdc1b4a422bfafd97cab4f69836401f616ae985d4b57a53d254f5bcb038"
 )
 WORKER_TIMEOUT_SECONDS = 50 * 60
+RUNNING_STALE_SECONDS = 65 * 60
 MAX_COMMAND_OUTPUT = 200_000
 MAX_DIFF_BYTES = 80_000
 MAX_DIFF_LINES = 800
@@ -939,7 +940,8 @@ def run_worker(*, paths: Paths | None = None, now: dt.datetime | None = None) ->
 
 def report(*, paths: Paths | None = None, now: dt.datetime | None = None) -> str:
     paths = paths or paths_from_env()
-    state = state_paths(paths, local_day(now))
+    current = now or dt.datetime.now(dt.timezone.utc)
+    state = state_paths(paths, local_day(current))
     lock = state_lock(paths)
     try:
         if state["reported"].exists():
@@ -950,6 +952,19 @@ def report(*, paths: Paths | None = None, now: dt.datetime | None = None) -> str
             os.replace(state["result"], state["reported"])
             return payload
         if state["running"].exists():
+            try:
+                started = dt.datetime.fromisoformat(state["running"].read_text(encoding="utf-8").strip())
+                if started.tzinfo is None:
+                    raise ValueError("naive running timestamp")
+                age = current.astimezone(dt.timezone.utc) - started.astimezone(dt.timezone.utc)
+            except (OSError, UnicodeError, ValueError):
+                age = dt.timedelta(seconds=RUNNING_STALE_SECONDS)
+            if age.total_seconds() < RUNNING_STALE_SECONDS:
+                return ""
+            os.replace(state["running"], state["reported"])
+            return "⚠️ Maintenance quotidienne interrompue : worker resté actif au-delà de la limite maximale."
+        paris_now = current.astimezone(ZoneInfo("Europe/Paris"))
+        if (paris_now.hour, paris_now.minute) < (11, 15):
             return ""
         atomic_write(state["reported"], "missing status emitted")
         return "⚠️ Aucun résultat de maintenance quotidienne n’a été produit aujourd’hui."
