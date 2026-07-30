@@ -32,6 +32,8 @@ DEFAULT_PROMPT = DEFAULT_REPOSITORY / "automation/prompts/daily-repository-maint
 DEFAULT_HERMES = Path("/home/debian/.local/bin/hermes")
 DEFAULT_WORKER = Path("/home/debian/.hermes/scripts/daily_repository_maintenance_worker.py")
 DEFAULT_PROFILE_HOME = Path("/home/debian/.hermes/profiles/dailymaintainer")
+DEFAULT_DOCKER_WRAPPER = Path("/home/debian/.hermes/bin/daily-maintenance/docker")
+DOCKER_WRAPPER_CONTENT = '#!/bin/sh\nexec /usr/bin/sudo -n /usr/bin/docker "$@"\n'
 HERMES_PROFILE = "dailymaintainer"
 WORKER_TIMEOUT_SECONDS = 50 * 60
 MAX_COMMAND_OUTPUT = 200_000
@@ -101,6 +103,7 @@ class Paths:
     hermes: Path
     worker: Path
     profile_home: Path
+    docker_wrapper: Path
 
 
 @dataclass(frozen=True)
@@ -119,6 +122,7 @@ def paths_from_env(env: Mapping[str, str] | None = None) -> Paths:
         Path(values.get("DAILY_MAINTENANCE_HERMES", DEFAULT_HERMES)),
         Path(values.get("DAILY_MAINTENANCE_WORKER", DEFAULT_WORKER)),
         Path(values.get("DAILY_MAINTENANCE_PROFILE_HOME", DEFAULT_PROFILE_HOME)),
+        Path(values.get("DAILY_MAINTENANCE_DOCKER_WRAPPER", DEFAULT_DOCKER_WRAPPER)),
     )
 
 
@@ -295,6 +299,20 @@ def repository_preflight(paths: Paths) -> str | None:
         return "remote Git canonique inattendu"
     if not paths.prompt.is_file() or not os.access(paths.hermes, os.X_OK):
         return "prompt versionné ou binaire Hermes absent"
+    if paths.docker_wrapper.is_symlink() or not paths.docker_wrapper.is_file():
+        return "wrapper Docker isolé absent"
+    try:
+        wrapper_stat = paths.docker_wrapper.stat()
+        wrapper_parent_stat = paths.docker_wrapper.parent.stat()
+        if paths.docker_wrapper.read_text(encoding="utf-8") != DOCKER_WRAPPER_CONTENT:
+            return "wrapper Docker isolé invalide"
+    except OSError:
+        return "wrapper Docker isolé non vérifiable"
+    if (
+        wrapper_stat.st_uid != os.getuid() or (wrapper_stat.st_mode & 0o777) != 0o700
+        or wrapper_parent_stat.st_uid != os.getuid() or (wrapper_parent_stat.st_mode & 0o777) != 0o700
+    ):
+        return "permissions du wrapper Docker isolé invalides"
     profile_error = profile_isolation_preflight(paths)
     if profile_error:
         return profile_error
@@ -419,7 +437,7 @@ def collect_evidence(paths: Paths) -> dict[str, Any]:
         "journal_categories": collect_journal(),
         "hermes_journal_categories": collect_journal(user=True),
     }
-    docker = run_command(["docker", "ps", "-a", "--format", "{{.State}}|{{.Status}}"], timeout=30)
+    docker = run_command(["/usr/bin/sudo", "-n", "/usr/bin/docker", "ps", "-a", "--format", "{{.State}}|{{.Status}}"], timeout=30)
     states: collections.Counter[str] = collections.Counter()
     if docker.returncode == 0:
         for line in docker.stdout.splitlines():
@@ -510,7 +528,7 @@ def sandbox_environment(paths: Paths, worktree: Path, evidence_file: Path) -> di
         "USER": os.environ.get("USER", "debian"),
         "LOGNAME": os.environ.get("LOGNAME", "debian"),
         "LANG": os.environ.get("LANG", "C.UTF-8"),
-        "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
+        "PATH": f"{paths.docker_wrapper.parent}:/home/debian/.local/bin:/usr/local/bin:/usr/bin:/bin",
         "TERMINAL_ENV": "docker",
         "TERMINAL_CWD": "/workspace",
         "TERMINAL_DOCKER_NETWORK": "false",
@@ -519,7 +537,9 @@ def sandbox_environment(paths: Paths, worktree: Path, evidence_file: Path) -> di
         "TERMINAL_DOCKER_MOUNT_CWD_TO_WORKSPACE": "false",
         "TERMINAL_DOCKER_FORWARD_ENV": "[]",
         "TERMINAL_DOCKER_ENV": "{}",
-        "TERMINAL_DOCKER_EXTRA_ARGS": "[]",
+        "TERMINAL_DOCKER_EXTRA_ARGS": json.dumps([
+            "--read-only", "--tmpfs", "/root:rw,noexec,nosuid,size=128m",
+        ]),
         "TERMINAL_DOCKER_RUN_AS_HOST_USER": "false",
         "TERMINAL_CONTAINER_PERSISTENT": "false",
         "TERMINAL_CONTAINER_CPU": "2",

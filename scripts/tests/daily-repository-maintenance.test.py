@@ -63,6 +63,11 @@ class DailyMaintenanceTests(unittest.TestCase):
             "skills:\n  external_dirs: []\nterminal:\n  credential_files: []\n",
             encoding="utf-8",
         )
+        self.docker_wrapper = self.root / "docker-bin/docker"
+        self.docker_wrapper.parent.mkdir()
+        self.docker_wrapper.parent.chmod(0o700)
+        self.docker_wrapper.write_text(MODULE.DOCKER_WRAPPER_CONTENT, encoding="utf-8")
+        self.docker_wrapper.chmod(0o700)
         self.paths = MODULE.Paths(
             state_root=self.root / "state",
             worktree_root=self.root / "worktrees",
@@ -71,6 +76,7 @@ class DailyMaintenanceTests(unittest.TestCase):
             hermes=self.hermes,
             worker=self.worker,
             profile_home=self.profile_home,
+            docker_wrapper=self.docker_wrapper,
         )
 
     def tearDown(self) -> None:
@@ -89,7 +95,7 @@ class DailyMaintenanceTests(unittest.TestCase):
     def test_collect_evidence_payload_contains_only_normalized_aggregates(self) -> None:
         def fake_run(argv, **_kwargs):
             joined = " ".join(argv)
-            if argv[:2] == ["docker", "ps"]:
+            if "docker ps -a" in joined:
                 return MODULE.CommandResult(0, "running|Up 2 hours\nexited|IGNORE token=host-secret\n")
             if "gh run list" in joined:
                 return MODULE.CommandResult(0, json.dumps([
@@ -134,7 +140,10 @@ class DailyMaintenanceTests(unittest.TestCase):
         self.assertEqual(env["TERMINAL_DOCKER_NETWORK"], "false")
         self.assertEqual(env["TERMINAL_DOCKER_FORWARD_ENV"], "[]")
         self.assertEqual(env["TERMINAL_DOCKER_ENV"], "{}")
-        self.assertEqual(env["TERMINAL_DOCKER_EXTRA_ARGS"], "[]")
+        self.assertEqual(
+            json.loads(env["TERMINAL_DOCKER_EXTRA_ARGS"]),
+            ["--read-only", "--tmpfs", "/root:rw,noexec,nosuid,size=128m"],
+        )
         self.assertEqual(env["TERMINAL_CONTAINER_PERSISTENT"], "false")
         self.assertNotIn("GITHUB_TOKEN", env)
         self.assertNotIn("OPENAI_API_KEY", env)
@@ -256,8 +265,14 @@ class DailyMaintenanceTests(unittest.TestCase):
         MODULE.atomic_write(later_state["result"], "x" * 5000)
         self.assertEqual(len(MODULE.report(paths=self.paths, now=later)), 4000)
 
-    def test_repository_preflight_requires_clean_main(self) -> None:
+    def test_repository_preflight_requires_clean_main_and_exact_wrapper(self) -> None:
         self.assertIsNone(MODULE.repository_preflight(self.paths))
+        self.docker_wrapper.chmod(0o755)
+        self.assertEqual(
+            MODULE.repository_preflight(self.paths),
+            "permissions du wrapper Docker isolé invalides",
+        )
+        self.docker_wrapper.chmod(0o700)
         (self.repo / "docs/guide.md").write_text("dirty\n", encoding="utf-8")
         self.assertEqual(MODULE.repository_preflight(self.paths), "checkout canonique non propre")
 

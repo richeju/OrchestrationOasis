@@ -56,12 +56,15 @@ The sandbox has:
 - no forwarded environment variables, literal Docker environment, extra Docker arguments, or skill/credential/cache data;
 - a fresh per-process container;
 - CPU and memory limits;
+- a read-only container root filesystem, with only bounded tmpfs mounts for `/root`, `/tmp`, `/var/tmp`, and `/run`;
 - only the disposable worktree mounted read-write;
 - `.git` metadata mounted read-only;
 - the aggregate evidence file mounted read-only;
 - no canonical checkout, host home, SSH configuration, `gh` authentication, OpenBao data, or service sockets.
 
-The worktree uses bounded tmpfs rather than the VPS root filesystem, limiting disk-filling impact.
+The worktree uses host tmpfs rather than the VPS root filesystem, limiting persistent disk-filling impact. The active Docker overlay is ext4-backed and cannot enforce Hermes' requested overlay quota, so the controller explicitly makes the container root filesystem read-only instead of relying on that unsupported quota.
+
+The `debian` account does not receive Docker-group membership and the Docker socket is never mounted. Hermes finds a dedicated host-side `docker` wrapper through a fixed minimal `PATH`; the controller verifies exact wrapper content, owner, file mode `0700`, and parent-directory mode `0700` before launch. The wrapper only executes `/usr/bin/sudo -n /usr/bin/docker` with Hermes-generated backend arguments. Model commands remain inside the resulting container and cannot invoke the host wrapper.
 
 ### Evidence from logs and operations
 
@@ -134,10 +137,18 @@ A filesystem lock serializes launcher, worker, and reporter state transitions; a
 The public repository intentionally does not write private Hermes profile or cron state. Runtime installation is an explicit out-of-band operator action after the reviewed repository change is merged:
 
 1. create the dedicated `dailymaintainer` profile with `--no-skills`, configure only the selected model/provider authentication, and keep `skills.external_dirs` plus `terminal.credential_files` empty;
-2. configure and validate the canonical repository's fetch and push URL as `https://github.com/richeju/OrchestrationOasis.git`, then pre-pull the pinned/default Hermes Docker backend image;
-3. copy the reviewed controller source to the three private entry-point paths with mode `0700`;
-4. register exactly two private no-agent jobs at `0 10 * * *` and `0 11 * * *`;
-5. compare checksums and inspect the registered schedules before enabling the first run.
+2. configure and validate the canonical repository's fetch and push URL as `https://github.com/richeju/OrchestrationOasis.git`, then pre-pull the reviewed Hermes Docker backend image;
+3. install the exact documented Docker wrapper in `~/.hermes/bin/daily-maintenance/docker`, with both wrapper and parent directory mode `0700`;
+4. copy the reviewed controller source to the three private entry-point paths with mode `0700`;
+5. register exactly two private no-agent jobs at `0 10 * * *` and `0 11 * * *`;
+6. compare checksums and inspect the registered schedules before enabling the first run.
+
+Exact wrapper content:
+
+```sh
+#!/bin/sh
+exec /usr/bin/sudo -n /usr/bin/docker "$@"
+```
 
 Read-only drift check:
 
@@ -146,7 +157,8 @@ sha256sum scripts/daily-repository-maintenance.py \
   ~/.hermes/scripts/daily_repository_maintenance_launcher.py \
   ~/.hermes/scripts/daily_repository_maintenance_worker.py \
   ~/.hermes/scripts/daily_repository_maintenance_reporter.py
-stat -c '%a %U:%G %n' ~/.hermes/scripts/daily_repository_maintenance_*.py
+stat -c '%a %U:%G %n' ~/.hermes/scripts/daily_repository_maintenance_*.py \
+  ~/.hermes/bin/daily-maintenance ~/.hermes/bin/daily-maintenance/docker
 hermes cron list
 ```
 
