@@ -37,6 +37,8 @@ WORKER_TIMEOUT_SECONDS = 50 * 60
 MAX_COMMAND_OUTPUT = 200_000
 MAX_DIFF_BYTES = 80_000
 MAX_DIFF_LINES = 800
+MAX_CHANGED_FILES = 3
+EXPECTED_ORIGIN = "https://github.com/richeju/OrchestrationOasis.git"
 
 ALLOWED_EXISTING_PATHS = (
     re.compile(r"^docs/[A-Za-z0-9._/-]+\.md$"),
@@ -63,6 +65,8 @@ SECRET_PATTERNS = (
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
     re.compile(r"https?://[^\s/:]+:[^\s/@]+@"),
     re.compile(r"(?i)(?:password|passwd|api[_-]?key|secret|token)\s*[:=]\s*[^\s$<{]{8,}"),
+    re.compile(r"(?i)authorization\s*[:=]\s*bearer\s+[A-Za-z0-9._~+/-]{12,}"),
+    re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
 )
 KNOWN_JOURNAL_UNITS = {
     "caddy": "caddy",
@@ -130,6 +134,7 @@ def state_paths(paths: Paths, day: str) -> dict[str, Path]:
         "launching": paths.state_root / f"{day}.launching",
         "running": paths.state_root / f"{day}.running",
         "result": paths.state_root / f"{day}.result",
+        "reported": paths.state_root / f"{day}.reported",
         "lock": paths.state_root / "state.lock",
     }
 
@@ -157,6 +162,23 @@ def state_lock(paths: Paths):
     stream = (paths.state_root / "state.lock").open("a+", encoding="utf-8")
     fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
     return stream
+
+
+def repository_lock(paths: Paths):
+    paths.state_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    stream = (paths.state_root / "repository.lock").open("a+", encoding="utf-8")
+    fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+    return stream
+
+
+def git_argv(*args: str) -> list[str]:
+    """Disable hooks and signing for every host Git mutation."""
+    return [
+        "git", "-c", "core.hooksPath=/dev/null",
+        "-c", "core.attributesFile=/dev/null",
+        "-c", "commit.gpgSign=false", "-c", "push.gpgSign=false",
+        *args,
+    ]
 
 
 def _terminate_process_group(process: subprocess.Popen[Any]) -> None:
@@ -259,14 +281,18 @@ def run_quiet_process(
 
 
 def repository_preflight(paths: Paths) -> str | None:
-    branch = run_command(["git", "branch", "--show-current"], cwd=paths.repository)
-    status = run_command(["git", "status", "--porcelain"], cwd=paths.repository)
-    if branch.returncode != 0 or status.returncode != 0:
+    branch = run_command(git_argv("branch", "--show-current"), cwd=paths.repository)
+    status = run_command(git_argv("status", "--porcelain"), cwd=paths.repository)
+    origin = run_command(git_argv("remote", "get-url", "origin"), cwd=paths.repository)
+    push_origin = run_command(git_argv("remote", "get-url", "--push", "origin"), cwd=paths.repository)
+    if branch.returncode != 0 or status.returncode != 0 or origin.returncode != 0 or push_origin.returncode != 0:
         return "dépôt Git non vérifiable"
     if branch.stdout.strip() != "main":
         return "branche canonique inattendue"
     if status.stdout.strip():
         return "checkout canonique non propre"
+    if origin.stdout.strip() != EXPECTED_ORIGIN or push_origin.stdout.strip() != EXPECTED_ORIGIN:
+        return "remote Git canonique inattendu"
     if not paths.prompt.is_file() or not os.access(paths.hermes, os.X_OK):
         return "prompt versionné ou binaire Hermes absent"
     profile_error = profile_isolation_preflight(paths)
@@ -324,7 +350,7 @@ def launch(*, paths: Paths | None = None, now: dt.datetime | None = None) -> str
     state = state_paths(paths, day)
     lock = state_lock(paths)
     try:
-        if state["result"].exists() or state["running"].exists() or state["launching"].exists():
+        if state["result"].exists() or state["reported"].exists() or state["running"].exists() or state["launching"].exists():
             return ""
         blocker = repository_preflight(paths)
         if blocker:
@@ -456,22 +482,26 @@ def open_daily_pr(paths: Paths) -> tuple[dict[str, str] | None, str | None]:
     return None, None
 
 
-def prepare_worktree(paths: Paths, day: str) -> tuple[Path | None, str | None]:
-    prune = run_command(["git", "worktree", "prune"], cwd=paths.repository, timeout=30)
+def prepare_worktree(paths: Paths, day: str) -> tuple[Path | None, str | None, str | None]:
+    prune = run_command(git_argv("worktree", "prune"), cwd=paths.repository, timeout=30)
     if prune.returncode != 0:
-        return None, "nettoyage des métadonnées de worktree impossible"
-    fetch = run_command(["git", "fetch", "--prune", "origin", "main"], cwd=paths.repository, timeout=90)
+        return None, None, "nettoyage des métadonnées de worktree impossible"
+    fetch = run_command(git_argv("fetch", "--prune", "origin", "main"), cwd=paths.repository, timeout=90)
     if fetch.returncode != 0:
-        return None, "fetch origin/main impossible"
+        return None, None, "fetch origin/main impossible"
+    resolved = run_command(git_argv("rev-parse", "--verify", "origin/main^{commit}"), cwd=paths.repository)
+    base_sha = resolved.stdout.strip()
+    if resolved.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40}", base_sha):
+        return None, None, "SHA origin/main non vérifiable"
     path = paths.worktree_root / day
     branch = f"daily/{day}-maintenance"
     if path.exists():
-        return None, "worktree quotidien déjà présent"
+        return None, None, "worktree quotidien déjà présent"
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    result = run_command(["git", "worktree", "add", "-b", branch, str(path), "origin/main"], cwd=paths.repository, timeout=60)
+    result = run_command(git_argv("worktree", "add", "-b", branch, str(path), base_sha), cwd=paths.repository, timeout=60)
     if result.returncode != 0:
-        return None, "création du worktree isolé impossible"
-    return path, None
+        return None, None, "création du worktree isolé impossible"
+    return path, base_sha, None
 
 
 def sandbox_environment(paths: Paths, worktree: Path, evidence_file: Path) -> dict[str, str]:
@@ -507,17 +537,19 @@ def sandbox_environment(paths: Paths, worktree: Path, evidence_file: Path) -> di
     return env
 
 
-def changed_paths(worktree: Path) -> list[str]:
-    tracked = run_command(["git", "diff", "--name-only", "-z", "origin/main"], cwd=worktree)
-    untracked = run_command(["git", "ls-files", "--others", "--exclude-standard", "-z"], cwd=worktree)
+def changed_paths(worktree: Path, base_sha: str) -> list[str]:
+    tracked = run_command(git_argv("diff", "--no-ext-diff", "--no-textconv", "--name-only", "-z", base_sha), cwd=worktree)
+    untracked = run_command(git_argv("ls-files", "--others", "--exclude-standard", "-z"), cwd=worktree)
     if tracked.returncode != 0 or untracked.returncode != 0:
         return ["<git-error>"]
     return sorted({part for part in (tracked.stdout + untracked.stdout).split("\0") if part and part != ".daily-evidence.json"})
 
 
-def validate_diff(worktree: Path, paths: list[str]) -> str | None:
+def validate_diff(worktree: Path, base_sha: str, paths: list[str]) -> str | None:
     if not paths:
         return None
+    if len(paths) > MAX_CHANGED_FILES:
+        return "trop de fichiers modifiés"
     for relative in paths:
         if relative == "<git-error>" or relative.startswith("/") or ".." in Path(relative).parts:
             return "chemin de diff invalide"
@@ -526,12 +558,15 @@ def validate_diff(worktree: Path, paths: list[str]) -> str | None:
             return "chemin interdit"
         if not any(pattern.fullmatch(relative) for pattern in ALLOWED_EXISTING_PATHS):
             return "chemin hors allowlist"
-        if run_command(["git", "cat-file", "-e", f"origin/main:{relative}"], cwd=worktree).returncode != 0:
+        if run_command(git_argv("cat-file", "-e", f"{base_sha}:{relative}"), cwd=worktree).returncode != 0:
             return "nouveau fichier non autorisé"
         candidate = worktree / relative
         if candidate.is_symlink() or not candidate.is_file():
             return "type de fichier interdit"
-    diff = run_command(["git", "diff", "--no-ext-diff", "--binary", "origin/main"], cwd=worktree, timeout=30)
+    summary = run_command(git_argv("diff", "--no-ext-diff", "--no-textconv", "--summary", base_sha), cwd=worktree, timeout=30)
+    if summary.returncode != 0 or summary.stdout.strip():
+        return "changement de type, mode ou renommage interdit"
+    diff = run_command(git_argv("diff", "--no-ext-diff", "--no-textconv", "--binary", base_sha), cwd=worktree, timeout=30)
     if diff.returncode != 0:
         return "diff non lisible"
     encoded = diff.stdout.encode("utf-8", errors="replace")
@@ -544,29 +579,108 @@ def validate_diff(worktree: Path, paths: list[str]) -> str | None:
     return None
 
 
-def cleanup_worktree(paths: Paths, worktree: Path, branch: str) -> None:
-    run_command(["git", "worktree", "remove", "--force", str(worktree)], cwd=paths.repository, timeout=60)
-    run_command(["git", "branch", "-D", branch], cwd=paths.repository, timeout=30)
+def cleanup_worktree(paths: Paths, worktree: Path, branch: str) -> bool:
+    removed = run_command(git_argv("worktree", "remove", "--force", str(worktree)), cwd=paths.repository, timeout=60)
+    deleted = run_command(git_argv("branch", "-D", branch), cwd=paths.repository, timeout=30)
+    return removed.returncode == 0 and deleted.returncode == 0
 
 
-def static_host_validation(worktree: Path) -> tuple[bool, str]:
+def static_host_validation(worktree: Path, base_sha: str) -> tuple[bool, str]:
     """Validate without executing any model-modified repository content."""
-    check = run_command(["git", "diff", "--no-ext-diff", "--check"], cwd=worktree, timeout=30)
+    check = run_command(git_argv("diff", "--no-ext-diff", "--no-textconv", "--check", base_sha), cwd=worktree, timeout=30)
     if check.returncode != 0:
         return False, "git diff --check"
     return True, "static policy"
 
 
-def publish_pr(paths: Paths, worktree: Path, day: str, files: list[str]) -> tuple[str | None, str | None]:
+def stage_without_filters(worktree: Path, base_sha: str, files: list[str]) -> str | None:
+    for relative in files:
+        tree = run_command(git_argv("ls-tree", base_sha, "--", relative), cwd=worktree)
+        match = re.fullmatch(r"(100644|100755) blob [0-9a-f]{40}\t.+\n?", tree.stdout)
+        if tree.returncode != 0 or not match:
+            return "mode Git de base non vérifiable"
+        blob = run_command(git_argv("hash-object", "-w", "--no-filters", "--", relative), cwd=worktree)
+        object_id = blob.stdout.strip()
+        if blob.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40}", object_id):
+            return "création du blob Git impossible"
+        staged = run_command(
+            git_argv("update-index", "--add", "--cacheinfo", f"{match.group(1)},{object_id},{relative}"),
+            cwd=worktree,
+        )
+        if staged.returncode != 0:
+            return "indexation Git déterministe impossible"
+    return None
+
+
+def create_commit_without_hooks(worktree: Path, base_sha: str, branch: str, message: str) -> str | None:
+    tree = run_command(git_argv("write-tree"), cwd=worktree)
+    tree_id = tree.stdout.strip()
+    if tree.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40}", tree_id):
+        return "création du tree Git impossible"
+    commit = run_command(git_argv("commit-tree", tree_id, "-p", base_sha, "-m", message), cwd=worktree)
+    commit_id = commit.stdout.strip()
+    if commit.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40}", commit_id):
+        return "création du commit Git impossible"
+    updated = run_command(
+        git_argv("update-ref", f"refs/heads/{branch}", commit_id, base_sha), cwd=worktree
+    )
+    return None if updated.returncode == 0 else "mise à jour déterministe de la branche impossible"
+
+
+def base_is_unchanged(paths: Paths, base_sha: str) -> bool:
+    resolved = run_command(git_argv("rev-parse", "--verify", "origin/main^{commit}"), cwd=paths.repository)
+    return resolved.returncode == 0 and resolved.stdout.strip() == base_sha and repository_preflight(paths) is None
+
+
+def published_pr_for_branch(paths: Paths, branch: str) -> tuple[str | None, str | None]:
+    result = run_command([
+        "gh", "pr", "list", "--state", "open", "--head", branch,
+        "--limit", "1", "--json", "url",
+    ], cwd=paths.repository, timeout=30)
+    if result.returncode != 0:
+        return None, "état GitHub non vérifiable après création de PR"
+    try:
+        rows = json.loads(result.stdout)
+        url = str(rows[0]["url"]) if len(rows) == 1 else ""
+    except (KeyError, TypeError, ValueError):
+        return None, "réponse GitHub invalide après création de PR"
+    if not rows:
+        return None, None
+    if re.fullmatch(r"https://github\.com/richeju/OrchestrationOasis/pull/\d+", url):
+        return url, None
+    return None, "URL de PR GitHub invalide"
+
+
+def remote_branch_state(worktree: Path, branch: str) -> bool | None:
+    result = run_command(
+        git_argv("ls-remote", "--heads", "origin", f"refs/heads/{branch}"),
+        cwd=worktree, timeout=60,
+    )
+    if result.returncode != 0:
+        return None
+    return bool(result.stdout.strip())
+
+
+def publish_pr(paths: Paths, worktree: Path, base_sha: str, day: str, files: list[str]) -> tuple[str | None, str | None]:
     branch = f"daily/{day}-maintenance"
-    add = run_command(["git", "add", "--", *files], cwd=worktree)
-    if add.returncode != 0:
-        return None, "git add impossible"
-    commit = run_command(["git", "commit", "-m", f"chore: daily maintenance candidate {day}"], cwd=worktree, timeout=60)
-    if commit.returncode != 0:
-        return None, "commit impossible"
-    push = run_command(["git", "push", "-u", "origin", branch], cwd=worktree, timeout=120)
+    staging_error = stage_without_filters(worktree, base_sha, files)
+    if staging_error:
+        return None, staging_error
+    commit_error = create_commit_without_hooks(
+        worktree, base_sha, branch, f"chore: daily maintenance candidate {day}"
+    )
+    if commit_error:
+        return None, commit_error
+    push = run_command(git_argv("push", "--no-verify", "-u", "origin", branch), cwd=worktree, timeout=120)
     if push.returncode != 0:
+        remote_state = remote_branch_state(worktree, branch)
+        if remote_state is True:
+            rollback = run_command(git_argv("push", "--no-verify", "origin", "--delete", branch), cwd=worktree, timeout=120)
+            if rollback.returncode == 0:
+                return None, "push non confirmé ; branche distante supprimée"
+            return None, "push non confirmé ; branche distante potentiellement orpheline"
+        if remote_state is None:
+            return None, "push et état de branche distante non vérifiables"
         return None, "push impossible"
     body = (
         "## Daily maintenance candidate\n\n"
@@ -585,7 +699,15 @@ def publish_pr(paths: Paths, worktree: Path, day: str, files: list[str]) -> tupl
     ], cwd=worktree, timeout=60)
     url = pr.stdout.strip().splitlines()[-1] if pr.returncode == 0 and pr.stdout.strip() else ""
     if not re.fullmatch(r"https://github\.com/richeju/OrchestrationOasis/pull/\d+", url):
-        return None, "création de PR non confirmée"
+        recovered, lookup_error = published_pr_for_branch(paths, branch)
+        if recovered:
+            return recovered, None
+        if lookup_error:
+            return None, f"création de PR non confirmée ; {lookup_error} ; branche distante conservée"
+        rollback = run_command(git_argv("push", "--no-verify", "origin", "--delete", branch), cwd=worktree, timeout=120)
+        if rollback.returncode == 0:
+            return None, "création de PR non confirmée ; branche distante supprimée"
+        return None, "création de PR non confirmée ; branche distante potentiellement orpheline"
     return url, None
 
 
@@ -595,7 +717,7 @@ def run_worker(*, paths: Paths | None = None, now: dt.datetime | None = None) ->
     state = state_paths(paths, day)
     lock = state_lock(paths)
     try:
-        if state["result"].exists() or state["running"].exists():
+        if state["result"].exists() or state["reported"].exists() or state["running"].exists():
             return 0
         state["launching"].unlink(missing_ok=True)
         blocker = repository_preflight(paths)
@@ -613,11 +735,13 @@ def run_worker(*, paths: Paths | None = None, now: dt.datetime | None = None) ->
     finally:
         lock.close()
 
+    repo_guard = repository_lock(paths)
     worktree: Path | None = None
+    base_sha: str | None = None
     branch = f"daily/{day}-maintenance"
     try:
-        worktree, error = prepare_worktree(paths, day)
-        if error or worktree is None:
+        worktree, base_sha, error = prepare_worktree(paths, day)
+        if error or worktree is None or base_sha is None:
             atomic_write(state["result"], f"⚠️ Maintenance quotidienne interrompue : {error}.")
             return 1
         evidence = collect_evidence(paths)
@@ -634,27 +758,35 @@ def run_worker(*, paths: Paths | None = None, now: dt.datetime | None = None) ->
         if code != 0:
             atomic_write(state["result"], f"⚠️ Maintenance quotidienne : worker isolé en échec (exit={code}). Worktree conservé pour analyse : {worktree}")
             return 1
-        files = changed_paths(worktree)
+        files = changed_paths(worktree, base_sha)
         if not files:
-            cleanup_worktree(paths, worktree, branch)
+            if not cleanup_worktree(paths, worktree, branch):
+                atomic_write(state["result"], "⚠️ Aucun changement candidat, mais le nettoyage du worktree a échoué.")
+                return 1
             atomic_write(state["result"], "ℹ️ Maintenance quotidienne : aucun bugfix ou improvement sûr et justifié aujourd’hui. Aucun changement créé.")
             return 0
-        policy_error = validate_diff(worktree, files)
+        policy_error = validate_diff(worktree, base_sha, files)
         if policy_error:
             atomic_write(state["result"], f"⚠️ Candidat quotidien rejeté par la politique déterministe : {policy_error}. Worktree conservé : {worktree}")
             return 1
-        valid, failed_check = static_host_validation(worktree)
+        valid, failed_check = static_host_validation(worktree, base_sha)
         if not valid:
             atomic_write(state["result"], f"⚠️ Candidat quotidien non publié : échec de {failed_check}. Worktree conservé : {worktree}")
             return 1
-        url, publish_error = publish_pr(paths, worktree, day, files)
+        if not base_is_unchanged(paths, base_sha):
+            atomic_write(state["result"], "⚠️ Candidat quotidien non publié : base Git ou checkout canonique modifié pendant le run. Worktree conservé.")
+            return 1
+        url, publish_error = publish_pr(paths, worktree, base_sha, day, files)
         if publish_error or not url:
             atomic_write(state["result"], f"⚠️ Candidat validé localement mais non publié : {publish_error}. Worktree conservé : {worktree}")
             return 1
-        cleanup_worktree(paths, worktree, branch)
+        if not cleanup_worktree(paths, worktree, branch):
+            atomic_write(state["result"], f"⚠️ PR publiée mais nettoyage local incomplet : {url}. Aucune fusion ni aucun déploiement automatique.")
+            return 1
         atomic_write(state["result"], f"✅ Candidat quotidien publié en PR, sans fusion ni déploiement : {url}. Fichiers allowlistés modifiés : {len(files)}. Politique statique : OK ; tests/scans délégués à la CI GitHub isolée.")
         return 0
     finally:
+        repo_guard.close()
         state["running"].unlink(missing_ok=True)
 
 
@@ -664,9 +796,15 @@ def report(*, paths: Paths | None = None, now: dt.datetime | None = None) -> str
     lock = state_lock(paths)
     try:
         if state["result"].is_file():
-            return state["result"].read_text(encoding="utf-8", errors="replace")[:4000].strip()
+            payload = state["result"].read_text(encoding="utf-8", errors="replace")[:4000].strip()
+            os.replace(state["result"], state["reported"])
+            return payload
+        if state["reported"].exists():
+            return ""
         if state["running"].exists():
+            atomic_write(state["reported"], "running status emitted")
             return "⚠️ Maintenance quotidienne toujours active après une heure ; le service systemd la bornera automatiquement."
+        atomic_write(state["reported"], "missing status emitted")
         return "⚠️ Aucun résultat de maintenance quotidienne n’a été produit aujourd’hui."
     finally:
         lock.close()

@@ -34,6 +34,7 @@ class DailyMaintenanceTests(unittest.TestCase):
         subprocess.run(["git", "config", "user.name", "Test"], cwd=self.repo, check=True)
         files = {
             "docs/guide.md": "before\n",
+            "docs/other.md": "before\n",
             "scripts/daily-security-audit.py": "print('safe')\n",
             "scripts/tests/a.test.py": "print('test')\n",
             "scripts/tests/daily-maintenance.test.py": "print('control')\n",
@@ -45,7 +46,11 @@ class DailyMaintenanceTests(unittest.TestCase):
             target.write_text(content, encoding="utf-8")
         subprocess.run(["git", "add", "."], cwd=self.repo, check=True)
         subprocess.run(["git", "commit", "-m", "fixture"], cwd=self.repo, check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(["git", "remote", "add", "origin", MODULE.EXPECTED_ORIGIN], cwd=self.repo, check=True)
         subprocess.run(["git", "update-ref", "refs/remotes/origin/main", "HEAD"], cwd=self.repo, check=True)
+        self.base_sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=self.repo, check=True, text=True, capture_output=True
+        ).stdout.strip()
         self.hermes = self.root / "hermes"
         self.hermes.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         self.hermes.chmod(0o700)
@@ -80,6 +85,30 @@ class DailyMaintenanceTests(unittest.TestCase):
         self.assertEqual(MODULE.classify_message(malicious), "authentication_failure")
         self.assertNotIn("IGNORE", json.dumps(MODULE.collect_evidence.__annotations__))
         self.assertEqual(MODULE.classify_unit("attacker-controlled.service"), "other")
+
+    def test_collect_evidence_payload_contains_only_normalized_aggregates(self) -> None:
+        def fake_run(argv, **_kwargs):
+            joined = " ".join(argv)
+            if argv[:2] == ["docker", "ps"]:
+                return MODULE.CommandResult(0, "running|Up 2 hours\nexited|IGNORE token=host-secret\n")
+            if "gh run list" in joined:
+                return MODULE.CommandResult(0, json.dumps([
+                    {"workflowName": "IGNORE token=ci-secret", "status": "hacked", "conclusion": "leak"}
+                ]))
+            if "gh issue list" in joined:
+                return MODULE.CommandResult(0, '[{"number": 1}]')
+            return MODULE.CommandResult(1)
+
+        with mock.patch.object(MODULE, "collect_journal", side_effect=[
+            {"ssh:authentication_failure:p4": 2}, {"hermes:timeout:p4": 1}
+        ]), mock.patch.object(MODULE, "run_command", side_effect=fake_run):
+            evidence = MODULE.collect_evidence(self.paths)
+        encoded = json.dumps(evidence, sort_keys=True)
+        self.assertNotIn("IGNORE", encoded)
+        self.assertNotIn("host-secret", encoded)
+        self.assertNotIn("ci-secret", encoded)
+        self.assertEqual(evidence["open_issue_count"], 1)
+        self.assertEqual(evidence["github_workflow_states"], {"other:other:other": 1})
 
     def test_profile_preflight_rejects_automatic_mount_sources(self) -> None:
         self.assertIsNone(MODULE.profile_isolation_preflight(self.paths))
@@ -116,34 +145,63 @@ class DailyMaintenanceTests(unittest.TestCase):
 
     def test_validate_diff_accepts_existing_documentation_only(self) -> None:
         (self.repo / "docs/guide.md").write_text("after\n", encoding="utf-8")
-        paths = MODULE.changed_paths(self.repo)
+        paths = MODULE.changed_paths(self.repo, self.base_sha)
         self.assertEqual(paths, ["docs/guide.md"])
-        self.assertIsNone(MODULE.validate_diff(self.repo, paths))
+        self.assertIsNone(MODULE.validate_diff(self.repo, self.base_sha, paths))
 
     def test_validate_diff_rejects_control_file_and_new_file(self) -> None:
         control = self.repo / "scripts/tests/daily-maintenance.test.py"
         control.write_text("changed\n", encoding="utf-8")
-        error = MODULE.validate_diff(self.repo, MODULE.changed_paths(self.repo))
+        error = MODULE.validate_diff(self.repo, self.base_sha, MODULE.changed_paths(self.repo, self.base_sha))
         self.assertIn("interdit", error or "")
         subprocess.run(["git", "restore", "."], cwd=self.repo, check=True)
         new_file = self.repo / "docs/new.md"
         new_file.write_text("new\n", encoding="utf-8")
-        error = MODULE.validate_diff(self.repo, MODULE.changed_paths(self.repo))
+        error = MODULE.validate_diff(self.repo, self.base_sha, MODULE.changed_paths(self.repo, self.base_sha))
         self.assertIn("nouveau fichier", error or "")
 
     def test_validate_diff_rejects_secret_pattern(self) -> None:
         (self.repo / "docs/guide.md").write_text("token = github_pat_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n", encoding="utf-8")
-        error = MODULE.validate_diff(self.repo, MODULE.changed_paths(self.repo))
+        error = MODULE.validate_diff(self.repo, self.base_sha, MODULE.changed_paths(self.repo, self.base_sha))
         self.assertIn("secret potentiel", error or "")
+
+    def test_validate_diff_enforces_three_file_limit(self) -> None:
+        for relative in (
+            "docs/guide.md", "docs/other.md", "scripts/daily-security-audit.py", "scripts/tests/a.test.py"
+        ):
+            (self.repo / relative).write_text("changed\n", encoding="utf-8")
+        files = MODULE.changed_paths(self.repo, self.base_sha)
+        self.assertEqual(len(files), 4)
+        self.assertIn("trop de fichiers", MODULE.validate_diff(self.repo, self.base_sha, files) or "")
 
     def test_static_validation_does_not_execute_candidate(self) -> None:
         marker = self.root / "executed"
         payload = f"from pathlib import Path\nPath({str(marker)!r}).write_text('bad')\n"
         (self.repo / "scripts/tests/a.test.py").write_text(payload, encoding="utf-8")
-        valid, label = MODULE.static_host_validation(self.repo)
+        valid, label = MODULE.static_host_validation(self.repo, self.base_sha)
         self.assertTrue(valid)
         self.assertEqual(label, "static policy")
         self.assertFalse(marker.exists())
+
+    def test_deterministic_staging_bypasses_filters_and_hooks(self) -> None:
+        filter_marker = self.root / "filter-executed"
+        hook_marker = self.root / "hook-executed"
+        subprocess.run(
+            ["git", "config", "filter.evil.clean", f"sh -c 'touch {filter_marker}; cat'"],
+            cwd=self.repo, check=True,
+        )
+        (self.repo / ".gitattributes").write_text("docs/guide.md filter=evil\n", encoding="utf-8")
+        hook = self.repo / ".git/hooks/pre-commit"
+        hook.write_text(f"#!/bin/sh\ntouch {hook_marker}\nexit 1\n", encoding="utf-8")
+        hook.chmod(0o700)
+        (self.repo / "docs/guide.md").write_text("safe staged bytes\n", encoding="utf-8")
+        self.assertIsNone(MODULE.stage_without_filters(self.repo, self.base_sha, ["docs/guide.md"]))
+        self.assertFalse(filter_marker.exists())
+        self.assertIsNone(
+            MODULE.create_commit_without_hooks(self.repo, self.base_sha, "main", "safe")
+        )
+        self.assertFalse(filter_marker.exists())
+        self.assertFalse(hook_marker.exists())
 
     def test_run_command_output_is_strictly_bounded(self) -> None:
         result = MODULE.run_command(
@@ -185,13 +243,18 @@ class DailyMaintenanceTests(unittest.TestCase):
         self.assertFalse(state["launching"].exists())
         self.assertTrue(state["result"].exists())
 
-    def test_report_is_deterministic_and_bounded(self) -> None:
+    def test_report_is_deterministic_bounded_and_idempotent(self) -> None:
         now = dt.datetime(2026, 7, 30, 9, 0, tzinfo=dt.timezone.utc)
         state = MODULE.state_paths(self.paths, "2026-07-30")
         MODULE.atomic_write(state["result"], "validated-result")
         self.assertEqual(MODULE.report(paths=self.paths, now=now), "validated-result")
-        state["result"].write_text("x" * 5000, encoding="utf-8")
-        self.assertEqual(len(MODULE.report(paths=self.paths, now=now)), 4000)
+        self.assertEqual(MODULE.report(paths=self.paths, now=now), "")
+        self.assertTrue(state["reported"].exists())
+
+        later = dt.datetime(2026, 7, 31, 9, 0, tzinfo=dt.timezone.utc)
+        later_state = MODULE.state_paths(self.paths, "2026-07-31")
+        MODULE.atomic_write(later_state["result"], "x" * 5000)
+        self.assertEqual(len(MODULE.report(paths=self.paths, now=later)), 4000)
 
     def test_repository_preflight_requires_clean_main(self) -> None:
         self.assertIsNone(MODULE.repository_preflight(self.paths))

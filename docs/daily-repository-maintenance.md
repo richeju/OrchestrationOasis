@@ -30,19 +30,21 @@ The worker has a 50-minute internal timeout. systemd enforces a 55-minute outer 
 `scripts/daily-repository-maintenance.py` performs only fixed operations:
 
 1. require the canonical checkout to be clean and on `main`;
-2. fetch `origin/main`;
+2. fetch `origin/main`, validate the expected HTTPS remote, and pin its immutable commit SHA;
 3. stop if an open `daily/*` PR already exists;
 4. create a disposable worktree under `/dev/shm/infraforge-daily-maintenance/<date>`;
 5. collect bounded aggregate evidence;
 6. run Hermes with all model tools routed into an air-gapped Docker sandbox;
 7. discard model stdout/stderr;
 8. remove the evidence file;
-9. validate changed paths, file types, size, whitespace, and secret patterns without executing candidate code;
-10. commit and push only an accepted candidate using fixed command arguments;
+9. validate changed paths, file types, size, whitespace, and secret patterns against that pinned SHA without executing candidate code;
+10. revalidate the canonical checkout/base, then build and push only an accepted candidate using filter-free Git plumbing;
 11. open a PR with a fixed body and no auto-merge;
 12. leave execution of the candidate to GitHub-hosted CI.
 
 Commands are passed as argument arrays, never through a model-authored shell string. The branch name, commit message, PR title, and PR body are deterministic.
+
+Host Git mutation is serialized by a separate repository lock. External diff/textconv drivers, hooks, and signing are disabled. Candidate bytes are staged with `hash-object --no-filters` plus `update-index`; the commit is built with `write-tree` and `commit-tree`, not porcelain `git add`/`git commit`.
 
 ### Hermes sandbox
 
@@ -51,7 +53,7 @@ The dedicated Hermes profile is `dailymaintainer`. It is created as a minimal `-
 The sandbox has:
 
 - `--network=none` through `TERMINAL_DOCKER_NETWORK=false`;
-- no forwarded environment variables, literal Docker environment, extra Docker arguments, skill mounts, cache data, or GitHub credentials;
+- no forwarded environment variables, literal Docker environment, extra Docker arguments, or skill/credential/cache data;
 - a fresh per-process container;
 - CPU and memory limits;
 - only the disposable worktree mounted read-write;
@@ -108,7 +110,7 @@ The VPS applies only non-executing checks to model-authored content:
 
 The candidate is then pushed as `daily/YYYY-MM-DD-maintenance` and opened as a PR. GitHub Actions runs `make check` and security scanning on GitHub-hosted `ubuntu-latest` runners. The worker never merges the PR, even if CI passes.
 
-A rejected or failed candidate worktree is retained in `/dev/shm/infraforge-daily-maintenance/<date>` until reboot or manual investigation. A successful or empty candidate worktree is removed.
+A rejected or failed candidate worktree is retained in `/dev/shm/infraforge-daily-maintenance/<date>` until reboot or manual investigation. A successful or empty candidate worktree is removed, and cleanup failure is reported rather than hidden. If PR creation is ambiguous after push, the controller queries GitHub and otherwise attempts to delete the remote branch; any possible orphan is stated explicitly.
 
 ## State and idempotency
 
@@ -123,15 +125,16 @@ Daily files:
 - `<date>.launching` — launcher reservation;
 - `<date>.running` — worker active;
 - `<date>.result` — deterministic WhatsApp report payload.
+- `<date>.reported` — payload already emitted (not a delivery-success acknowledgment).
 
-A filesystem lock serializes launcher, worker, and reporter state transitions. Repeated launcher invocations for the same day are no-ops once launching, running, or result state exists.
+A filesystem lock serializes launcher, worker, and reporter state transitions; a second lock serializes repository preparation and publication for the full worker run. Repeated launcher invocations for the same day are no-ops once launching, running, result, or reported state exists. A deterministic result payload is emitted at most once.
 
 ## Runtime deployment boundary
 
 The public repository intentionally does not write private Hermes profile or cron state. Runtime installation is an explicit out-of-band operator action after the reviewed repository change is merged:
 
 1. create the dedicated `dailymaintainer` profile with `--no-skills`, configure only the selected model/provider authentication, and keep `skills.external_dirs` plus `terminal.credential_files` empty;
-2. pre-pull the pinned/default Hermes Docker backend image;
+2. configure and validate the canonical repository's fetch and push URL as `https://github.com/richeju/OrchestrationOasis.git`, then pre-pull the pinned/default Hermes Docker backend image;
 3. copy the reviewed controller source to the three private entry-point paths with mode `0700`;
 4. register exactly two private no-agent jobs at `0 10 * * *` and `0 11 * * *`;
 5. compare checksums and inspect the registered schedules before enabling the first run.
