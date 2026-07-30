@@ -318,6 +318,7 @@ class DailyMaintenanceTests(unittest.TestCase):
         other_commit = "b" * 40
         responses = iter(
             [
+                MODULE.CommandResult(0, ""),
                 MODULE.CommandResult(1, "push rejected"),
                 MODULE.CommandResult(0, f"{other_commit}\trefs/heads/daily/2026-07-30-maintenance\n"),
             ]
@@ -330,13 +331,119 @@ class DailyMaintenanceTests(unittest.TestCase):
             )
         self.assertIsNone(url)
         self.assertIn("préexistante préservée", error or "")
-        self.assertEqual(runner.call_count, 2)
+        self.assertEqual(runner.call_count, 3)
+
+    def test_publish_refuses_every_preexisting_remote_branch(self) -> None:
+        commit_id = "c" * 40
+        for label, remote_commit in (
+            ("ancestor", "a" * 40),
+            ("identical", commit_id),
+            ("divergent", "d" * 40),
+        ):
+            with self.subTest(label=label), mock.patch.object(
+                MODULE, "stage_without_filters", return_value=None
+            ), mock.patch.object(
+                MODULE, "create_commit_without_hooks", return_value=(commit_id, None)
+            ), mock.patch.object(
+                MODULE, "run_command",
+                return_value=MODULE.CommandResult(
+                    0, f"{remote_commit}\trefs/heads/daily/2026-07-30-maintenance\n"
+                ),
+            ) as runner:
+                url, error = MODULE.publish_pr(
+                    self.paths, self.repo, self.base_sha, "2026-07-30", ["docs/guide.md"]
+                )
+            self.assertIsNone(url)
+            self.assertIn("préexistante conservée", error or "")
+            self.assertEqual(runner.call_count, 1)
+
+    def test_publish_requires_porcelain_new_branch_confirmation(self) -> None:
+        commit_id = "c" * 40
+        responses = iter([
+            MODULE.CommandResult(0, ""),
+            MODULE.CommandResult(
+                0,
+                f"To remote\n=\t{commit_id}:refs/heads/daily/2026-07-30-maintenance\t[up to date]\nDone\n",
+            ),
+        ])
+        with mock.patch.object(MODULE, "stage_without_filters", return_value=None), mock.patch.object(
+            MODULE, "create_commit_without_hooks", return_value=(commit_id, None)
+        ), mock.patch.object(MODULE, "run_command", side_effect=lambda *_args, **_kwargs: next(responses)) as runner:
+            url, error = MODULE.publish_pr(
+                self.paths, self.repo, self.base_sha, "2026-07-30", ["docs/guide.md"]
+            )
+        self.assertIsNone(url)
+        self.assertIn("création distante non confirmée", error or "")
+        push_argv = runner.call_args_list[1].args[0]
+        self.assertIn(
+            "--force-with-lease=refs/heads/daily/2026-07-30-maintenance:" + "0" * 40,
+            push_argv,
+        )
+
+    def test_create_remote_branch_is_atomic_against_bare_remote(self) -> None:
+        remote = self.root / "remote.git"
+        subprocess.run(["git", "init", "--bare", str(remote)], check=True, stdout=subprocess.DEVNULL)
+        (self.repo / "docs/guide.md").write_text("candidate\n", encoding="utf-8")
+        subprocess.run(["git", "add", "docs/guide.md"], cwd=self.repo, check=True)
+        subprocess.run(["git", "commit", "-m", "candidate"], cwd=self.repo, check=True, stdout=subprocess.DEVNULL)
+        candidate = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=self.repo, check=True, text=True, capture_output=True
+        ).stdout.strip()
+        branch = "daily/2026-07-30-maintenance"
+        remote_ref = f"refs/heads/{branch}"
+
+        with mock.patch.object(MODULE, "EXPECTED_ORIGIN", str(remote)):
+            created, error = MODULE.create_remote_branch(self.repo, branch, candidate)
+            self.assertTrue(created)
+            self.assertIsNone(error)
+            created, error = MODULE.create_remote_branch(self.repo, branch, candidate)
+            self.assertFalse(created)
+            self.assertIn("préexistante conservée", error or "")
+
+            subprocess.run(
+                ["git", f"--git-dir={remote}", "update-ref", remote_ref, self.base_sha], check=True
+            )
+            created, error = MODULE.create_remote_branch(self.repo, branch, candidate)
+            self.assertFalse(created)
+            self.assertIn("préexistante conservée", error or "")
+            actual = subprocess.run(
+                ["git", f"--git-dir={remote}", "rev-parse", remote_ref],
+                check=True, text=True, capture_output=True,
+            ).stdout.strip()
+            self.assertEqual(actual, self.base_sha)
+
+            tree = subprocess.run(
+                ["git", "rev-parse", "HEAD^{tree}"], cwd=self.repo, check=True, text=True, capture_output=True
+            ).stdout.strip()
+            divergent = subprocess.run(
+                ["git", "commit-tree", tree, "-m", "divergent"],
+                cwd=self.repo, check=True, text=True, capture_output=True,
+            ).stdout.strip()
+            subprocess.run(
+                ["git", "push", str(remote), f"{divergent}:refs/heads/test-divergent"],
+                cwd=self.repo, check=True, stdout=subprocess.DEVNULL,
+            )
+            subprocess.run(
+                ["git", f"--git-dir={remote}", "update-ref", remote_ref, divergent], check=True
+            )
+            created, error = MODULE.create_remote_branch(self.repo, branch, candidate)
+            self.assertFalse(created)
+            self.assertIn("préexistante conservée", error or "")
+            actual = subprocess.run(
+                ["git", f"--git-dir={remote}", "rev-parse", remote_ref],
+                check=True, text=True, capture_output=True,
+            ).stdout.strip()
+            self.assertEqual(actual, divergent)
 
     def test_pr_failure_never_deletes_remote_branch(self) -> None:
         commit_id = "c" * 40
         responses = iter(
             [
-                MODULE.CommandResult(0, "push ok"),
+                MODULE.CommandResult(0, ""),
+                MODULE.CommandResult(
+                    0,
+                    f"To remote\n*\t{commit_id}:refs/heads/daily/2026-07-30-maintenance\t[new branch]\nDone\n",
+                ),
                 MODULE.CommandResult(1, "gh failed"),
                 MODULE.CommandResult(0, "[]\n"),
             ]

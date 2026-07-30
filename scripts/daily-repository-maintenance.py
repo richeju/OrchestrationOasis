@@ -799,6 +799,41 @@ def remote_branch_state(worktree: Path, branch: str) -> tuple[str | None, str | 
     return match.group(1), None
 
 
+def create_remote_branch(worktree: Path, branch: str, commit_id: str) -> tuple[bool, str | None]:
+    remote_commit, remote_error = remote_branch_state(worktree, branch)
+    if remote_error:
+        return False, remote_error
+    if remote_commit:
+        return False, "publication refusée ; branche distante préexistante conservée"
+    destination = f"refs/heads/{branch}"
+    zero_oid = "0" * 40
+    push = run_command(
+        git_argv(
+            "push", "--porcelain", "--no-verify",
+            f"--force-with-lease={destination}:{zero_oid}",
+            EXPECTED_ORIGIN, f"{commit_id}:{destination}",
+        ),
+        cwd=worktree,
+        timeout=120,
+    )
+    if push.returncode != 0:
+        remote_commit, remote_error = remote_branch_state(worktree, branch)
+        if remote_error:
+            return False, f"push non confirmé ; {remote_error} ; aucune suppression distante"
+        if remote_commit == commit_id:
+            return False, "push non confirmé ; commit présent sur branche distante conservée"
+        if remote_commit:
+            return False, "push refusé ; branche distante préexistante préservée"
+        return False, "push impossible"
+    created_pattern = re.compile(
+        rf"^\*\t{commit_id}:{re.escape(destination)}\t\[new branch\]$",
+        re.MULTILINE,
+    )
+    if not created_pattern.search(push.stdout):
+        return False, "création distante non confirmée ; branche conservée sans ouverture de PR"
+    return True, None
+
+
 def publish_pr(paths: Paths, worktree: Path, base_sha: str, day: str, files: list[str]) -> tuple[str | None, str | None]:
     branch = f"daily/{day}-maintenance"
     staging_error = stage_without_filters(worktree, base_sha, files)
@@ -809,20 +844,9 @@ def publish_pr(paths: Paths, worktree: Path, base_sha: str, day: str, files: lis
     )
     if commit_error or not commit_id:
         return None, commit_error or "identifiant du commit déterministe absent"
-    push = run_command(
-        git_argv("push", "--no-verify", EXPECTED_ORIGIN, f"{commit_id}:refs/heads/{branch}"),
-        cwd=worktree,
-        timeout=120,
-    )
-    if push.returncode != 0:
-        remote_commit, remote_error = remote_branch_state(worktree, branch)
-        if remote_error:
-            return None, f"push non confirmé ; {remote_error} ; aucune suppression distante"
-        if remote_commit == commit_id:
-            return None, "push non confirmé ; commit présent sur branche distante conservée"
-        if remote_commit:
-            return None, "push refusé ; branche distante préexistante préservée"
-        return None, "push impossible"
+    created, create_error = create_remote_branch(worktree, branch, commit_id)
+    if not created:
+        return None, create_error or "création de branche distante non confirmée"
     body = (
         "## Daily maintenance candidate\n\n"
         "Generated in an air-gapped Docker sandbox from aggregate evidence only.\n\n"

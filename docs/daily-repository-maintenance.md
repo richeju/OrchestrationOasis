@@ -57,7 +57,7 @@ The sandbox has:
 - no host-forwarded environment variables, an empty literal Docker environment, no profile-supplied extra arguments, and no skill/credential/cache data;
 - a fresh per-process container from a registry image pinned by SHA-256 digest;
 - CPU and memory limits;
-- a read-only container root filesystem, with only bounded tmpfs mounts for `/root`, `/tmp`, `/var/tmp`, and `/run`;
+- a read-only container root filesystem, with only bounded tmpfs mounts for `/root`, `/home`, `/tmp`, `/var/tmp`, and `/run`;
 - only the disposable worktree mounted read-write;
 - `.git` metadata mounted read-only;
 - the aggregate evidence file mounted read-only;
@@ -113,7 +113,7 @@ The VPS applies only non-executing checks to model-authored content:
 - deterministic secret-pattern rejection.
 - deterministic rejection, on added lines, of URLs, IP literals, private-suffix hostnames, explicit user/owner assignments, and user-home paths.
 
-The candidate is then pushed as `daily/YYYY-MM-DD-maintenance` and opened as a PR. GitHub Actions runs `make check` and security scanning on GitHub-hosted `ubuntu-latest` runners. The worker never merges the PR, even if CI passes.
+The candidate branch `daily/YYYY-MM-DD-maintenance` is published only if `ls-remote` first reports it absent and a zero-OID lease plus porcelain response confirms an atomic `[new branch]` creation. Any pre-existing, concurrent, identical, or ambiguous ref is preserved and blocks PR creation. GitHub Actions runs `make check` and security scanning on GitHub-hosted `ubuntu-latest` runners. The worker never merges the PR, even if CI passes.
 
 A rejected or failed candidate worktree is retained in `/dev/shm/infraforge-daily-maintenance/<date>` until reboot or manual investigation. A successful or empty candidate worktree is removed, and cleanup failure is reported rather than hidden. The controller never deletes a remote branch: on ambiguous push or PR creation it preserves the branch and reports the possible orphan, avoiding destructive mutation of a pre-existing or concurrently changed ref.
 
