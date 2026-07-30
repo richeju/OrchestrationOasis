@@ -34,6 +34,8 @@ DEFAULT_HERMES = Path("/home/debian/.local/bin/hermes")
 DEFAULT_WORKER = Path("/home/debian/.hermes/scripts/daily_repository_maintenance_worker.py")
 DEFAULT_PROFILE_HOME = Path("/home/debian/.hermes/profiles/dailymaintainer")
 DEFAULT_DOCKER_WRAPPER = Path("/home/debian/.hermes/bin/daily-maintenance/docker")
+HERMES_PROJECT_ENV = Path("/home/debian/.hermes/hermes-agent/.env")
+HERMES_MANAGED_ENV = Path("/etc/hermes/.env")
 DOCKER_WRAPPER_CONTENT = '#!/bin/sh\nexec /usr/bin/sudo -n /usr/bin/docker "$@"\n'
 HERMES_PROFILE = "dailymaintainer"
 HERMES_PROVIDER = "openai-codex"
@@ -48,6 +50,7 @@ MAX_DIFF_BYTES = 80_000
 MAX_DIFF_LINES = 800
 MAX_CHANGED_FILES = 3
 EXPECTED_ORIGIN = "https://github.com/richeju/OrchestrationOasis.git"
+GH_REPOSITORY = "richeju/OrchestrationOasis"
 
 ALLOWED_EXISTING_PATHS = (
     re.compile(r"^docs/[A-Za-z0-9._/-]+\.md$"),
@@ -76,6 +79,13 @@ SECRET_PATTERNS = (
     re.compile(r"(?i)(?:password|passwd|api[_-]?key|secret|token)\s*[:=]\s*[^\s$<{]{8,}"),
     re.compile(r"(?i)authorization\s*[:=]\s*bearer\s+[A-Za-z0-9._~+/-]{12,}"),
     re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
+)
+PRIVATE_IDENTIFIER_PATTERNS = (
+    re.compile(r"https?://", re.IGNORECASE),
+    re.compile(r"(?<![0-9])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9])"),
+    re.compile(r"\b[a-z0-9][a-z0-9.-]*\.(?:internal|local|lan|home|arpa)\b", re.IGNORECASE),
+    re.compile(r"\b(?:user(?:name)?|owner|owned\s+by|login)\s*[:=]?\s*[a-z_][a-z0-9_-]{2,}\b", re.IGNORECASE),
+    re.compile(r"/(?:home|Users)/[A-Za-z0-9._-]+/"),
 )
 KNOWN_JOURNAL_UNITS = {
     "caddy": "caddy",
@@ -345,6 +355,23 @@ def profile_isolation_preflight(paths: Paths) -> str | None:
         config = loaded
     if "terminal" in config:
         return "section terminal interdite dans le profil isolé"
+    if "secrets" in config:
+        return "section secrets interdite dans le profil isolé"
+    profile_env = paths.profile_home / ".env"
+    if profile_env.is_symlink() or not profile_env.is_file():
+        return "fichier .env du profil isolé absent ou invalide"
+    try:
+        env_stat = profile_env.stat()
+        env_lines = profile_env.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        return "fichier .env du profil isolé non vérifiable"
+    if env_stat.st_uid != os.getuid() or (env_stat.st_mode & 0o777) != 0o600:
+        return "permissions du .env du profil isolé invalides"
+    if any(line.strip() and not line.lstrip().startswith("#") for line in env_lines):
+        return "affectation interdite dans le .env du profil isolé"
+    for startup_env in (paths.profile_home / ".op.env", HERMES_PROJECT_ENV, HERMES_MANAGED_ENV):
+        if startup_env.exists() or startup_env.is_symlink():
+            return f"source dotenv additionnelle interdite : {startup_env}"
     skills: dict[str, Any] = {}
 
     if isinstance(config.get("skills"), dict):
@@ -362,13 +389,11 @@ def profile_isolation_preflight(paths: Paths) -> str | None:
     )
     for relative in auto_mounted_roots:
         root = paths.profile_home / relative
-        if not root.exists():
-            continue
-        if root.is_symlink() or root.is_file():
-            return "contenu auto-monté interdit dans le profil isolé"
+        if root.is_symlink():
+            return f"données auto-montées interdites dans {relative}"
         try:
-            if any(entry.is_file() or entry.is_symlink() for entry in root.rglob("*")):
-                return "contenu auto-monté interdit dans le profil isolé"
+            if root.exists() and (not root.is_dir() or next(root.iterdir(), None) is not None):
+                return f"données auto-montées interdites dans {relative}"
         except OSError:
             return "contenu du profil isolé non vérifiable"
     return None
@@ -468,7 +493,7 @@ def collect_evidence(paths: Paths) -> dict[str, Any]:
         states["collection_error"] += 1
     evidence["docker_states"] = dict(sorted(states.items()))
 
-    runs = run_command(["gh", "run", "list", "--limit", "20", "--json", "workflowName,status,conclusion"], cwd=paths.repository, timeout=30)
+    runs = run_command(["gh", "run", "list", "--repo", GH_REPOSITORY, "--limit", "20", "--json", "workflowName,status,conclusion"], cwd=paths.repository, timeout=30)
     workflow_counts: collections.Counter[str] = collections.Counter()
     if runs.returncode == 0:
         try:
@@ -489,7 +514,7 @@ def collect_evidence(paths: Paths) -> dict[str, Any]:
         workflow_counts["collection_error"] += 1
     evidence["github_workflow_states"] = dict(sorted(workflow_counts.items()))
 
-    issues = run_command(["gh", "issue", "list", "--state", "open", "--limit", "100", "--json", "number"], cwd=paths.repository, timeout=30)
+    issues = run_command(["gh", "issue", "list", "--repo", GH_REPOSITORY, "--state", "open", "--limit", "100", "--json", "number"], cwd=paths.repository, timeout=30)
     try:
         evidence["open_issue_count"] = len(json.loads(issues.stdout)) if issues.returncode == 0 else -1
     except (TypeError, ValueError):
@@ -498,7 +523,7 @@ def collect_evidence(paths: Paths) -> dict[str, Any]:
 
 
 def open_daily_pr(paths: Paths) -> tuple[dict[str, str] | None, str | None]:
-    result = run_command(["gh", "pr", "list", "--state", "open", "--limit", "100", "--json", "number,url,headRefName"], cwd=paths.repository, timeout=30)
+    result = run_command(["gh", "pr", "list", "--repo", GH_REPOSITORY, "--state", "open", "--limit", "100", "--json", "number,url,headRefName"], cwd=paths.repository, timeout=30)
     if result.returncode != 0:
         return None, "état des PR GitHub non vérifiable"
     try:
@@ -516,7 +541,11 @@ def prepare_worktree(paths: Paths, day: str) -> tuple[Path | None, str | None, s
     prune = run_command(git_argv("worktree", "prune"), cwd=paths.repository, timeout=30)
     if prune.returncode != 0:
         return None, None, "nettoyage des métadonnées de worktree impossible"
-    fetch = run_command(git_argv("fetch", "--prune", "origin", "main"), cwd=paths.repository, timeout=90)
+    fetch = run_command(
+        git_argv("fetch", "--prune", EXPECTED_ORIGIN, "+refs/heads/main:refs/remotes/origin/main"),
+        cwd=paths.repository,
+        timeout=90,
+    )
     if fetch.returncode != 0:
         return None, None, "fetch origin/main impossible"
     resolved = run_command(git_argv("rev-parse", "--verify", "origin/main^{commit}"), cwd=paths.repository)
@@ -554,7 +583,11 @@ def sandbox_environment(paths: Paths, worktree: Path, evidence_file: Path) -> di
         "TERMINAL_DOCKER_FORWARD_ENV": "[]",
         "TERMINAL_DOCKER_ENV": "{}",
         "TERMINAL_DOCKER_EXTRA_ARGS": json.dumps([
-            "--read-only", "--tmpfs", "/root:rw,noexec,nosuid,size=128m",
+            "--read-only",
+            "--cpus=2",
+            "--memory=2048m",
+            "--pids-limit=256",
+            "--tmpfs", "/root:rw,noexec,nosuid,size=128m",
         ]),
         "TERMINAL_DOCKER_RUN_AS_HOST_USER": "false",
         "TERMINAL_CONTAINER_PERSISTENT": "false",
@@ -655,6 +688,12 @@ def validate_diff(worktree: Path, base_sha: str, paths: list[str]) -> str | None
         return "contenu binaire interdit"
     if any(pattern.search(diff.stdout) for pattern in SECRET_PATTERNS):
         return "secret potentiel détecté dans le diff"
+    added_lines = "\n".join(
+        line[1:] for line in diff.stdout.splitlines()
+        if line.startswith("+") and not line.startswith("+++")
+    )
+    if any(pattern.search(added_lines) for pattern in PRIVATE_IDENTIFIER_PATTERNS):
+        return "identifiant privé potentiel détecté dans les lignes ajoutées"
     return None
 
 
@@ -709,7 +748,11 @@ def create_commit_without_hooks(worktree: Path, base_sha: str, branch: str, mess
 
 
 def base_is_unchanged(paths: Paths, base_sha: str) -> bool:
-    fetched = run_command(git_argv("fetch", "--no-tags", "origin", "main"), cwd=paths.repository, timeout=120)
+    fetched = run_command(
+        git_argv("fetch", "--no-tags", EXPECTED_ORIGIN, "+refs/heads/main:refs/remotes/origin/main"),
+        cwd=paths.repository,
+        timeout=120,
+    )
     if fetched.returncode != 0:
         return False
     resolved = run_command(git_argv("rev-parse", "--verify", "origin/main^{commit}"), cwd=paths.repository)
@@ -723,7 +766,7 @@ def base_is_unchanged(paths: Paths, base_sha: str) -> bool:
 
 def published_pr_for_branch(paths: Paths, branch: str) -> tuple[str | None, str | None]:
     result = run_command([
-        "gh", "pr", "list", "--state", "open", "--head", branch,
+        "gh", "pr", "list", "--repo", GH_REPOSITORY, "--state", "open", "--head", branch,
         "--limit", "1", "--json", "url",
     ], cwd=paths.repository, timeout=30)
     if result.returncode != 0:
@@ -742,7 +785,7 @@ def published_pr_for_branch(paths: Paths, branch: str) -> tuple[str | None, str 
 
 def remote_branch_state(worktree: Path, branch: str) -> tuple[str | None, str | None]:
     result = run_command(
-        git_argv("ls-remote", "--heads", "origin", f"refs/heads/{branch}"),
+        git_argv("ls-remote", "--heads", EXPECTED_ORIGIN, f"refs/heads/{branch}"),
         cwd=worktree, timeout=60,
     )
     if result.returncode != 0:
@@ -766,7 +809,7 @@ def publish_pr(paths: Paths, worktree: Path, base_sha: str, day: str, files: lis
     if commit_error or not commit_id:
         return None, commit_error or "identifiant du commit déterministe absent"
     push = run_command(
-        git_argv("push", "--no-verify", "-u", "origin", f"{commit_id}:refs/heads/{branch}"),
+        git_argv("push", "--no-verify", EXPECTED_ORIGIN, f"{commit_id}:refs/heads/{branch}"),
         cwd=worktree,
         timeout=120,
     )
@@ -791,7 +834,7 @@ def publish_pr(paths: Paths, worktree: Path, base_sha: str, day: str, files: lis
         f"- Changed existing allowlisted files: {len(files)}\n"
     )
     pr = run_command([
-        "gh", "pr", "create", "--base", "main", "--head", branch,
+        "gh", "pr", "create", "--repo", GH_REPOSITORY, "--base", "main", "--head", branch,
         "--title", f"chore: daily maintenance candidate {day}", "--body", body,
     ], cwd=worktree, timeout=60)
     url = pr.stdout.strip().splitlines()[-1] if pr.returncode == 0 and pr.stdout.strip() else ""
@@ -899,15 +942,15 @@ def report(*, paths: Paths | None = None, now: dt.datetime | None = None) -> str
     state = state_paths(paths, local_day(now))
     lock = state_lock(paths)
     try:
+        if state["reported"].exists():
+            state["result"].unlink(missing_ok=True)
+            return ""
         if state["result"].is_file():
             payload = state["result"].read_text(encoding="utf-8", errors="replace")[:4000].strip()
             os.replace(state["result"], state["reported"])
             return payload
-        if state["reported"].exists():
-            return ""
         if state["running"].exists():
-            atomic_write(state["reported"], "running status emitted")
-            return "⚠️ Maintenance quotidienne toujours active après une heure ; le service systemd la bornera automatiquement."
+            return ""
         atomic_write(state["reported"], "missing status emitted")
         return "⚠️ Aucun résultat de maintenance quotidienne n’a été produit aujourd’hui."
     finally:

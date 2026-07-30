@@ -59,6 +59,8 @@ class DailyMaintenanceTests(unittest.TestCase):
         self.worker.chmod(0o700)
         self.profile_home = self.root / "profile"
         self.profile_home.mkdir()
+        (self.profile_home / ".env").write_text("# isolated profile; no assignments\n", encoding="utf-8")
+        (self.profile_home / ".env").chmod(0o600)
         (self.profile_home / "config.yaml").write_text(
             "{}\n",
             encoding="utf-8",
@@ -123,11 +125,23 @@ class DailyMaintenanceTests(unittest.TestCase):
         (cache / "upload.txt").write_text("private", encoding="utf-8")
         self.assertIn("auto-monté", MODULE.profile_isolation_preflight(self.paths) or "")
         (cache / "upload.txt").unlink()
+        fifo = cache / "socket-like"
+        os.mkfifo(fifo)
+        self.assertIn("auto-montées", MODULE.profile_isolation_preflight(self.paths) or "")
+        fifo.unlink()
+        (self.profile_home / ".env").write_text("TERMINAL_ENV=local\n", encoding="utf-8")
+        self.assertIn("affectation interdite", MODULE.profile_isolation_preflight(self.paths) or "")
+        (self.profile_home / ".env").write_text("# isolated profile; no assignments\n", encoding="utf-8")
         (self.profile_home / "config.yaml").write_text(
             "terminal:\n  backend: docker\n",
             encoding="utf-8",
         )
         self.assertIn("section terminal interdite", MODULE.profile_isolation_preflight(self.paths) or "")
+        (self.profile_home / "config.yaml").write_text(
+            "secrets:\n  bitwarden:\n    enabled: true\n",
+            encoding="utf-8",
+        )
+        self.assertIn("section secrets interdite", MODULE.profile_isolation_preflight(self.paths) or "")
 
     def test_worker_command_pins_provider_and_ignores_host_rules(self) -> None:
         command = MODULE.hermes_worker_command(self.paths)
@@ -167,7 +181,10 @@ class DailyMaintenanceTests(unittest.TestCase):
         self.assertRegex(env["TERMINAL_DOCKER_IMAGE"], r"@sha256:[0-9a-f]{64}$")
         self.assertEqual(
             json.loads(env["TERMINAL_DOCKER_EXTRA_ARGS"]),
-            ["--read-only", "--tmpfs", "/root:rw,noexec,nosuid,size=128m"],
+            [
+                "--read-only", "--cpus=2", "--memory=2048m", "--pids-limit=256",
+                "--tmpfs", "/root:rw,noexec,nosuid,size=128m",
+            ],
         )
         self.assertEqual(env["TERMINAL_CONTAINER_PERSISTENT"], "false")
         self.assertNotIn("GITHUB_TOKEN", env)
@@ -198,6 +215,14 @@ class DailyMaintenanceTests(unittest.TestCase):
         (self.repo / "docs/guide.md").write_text("token = github_pat_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n", encoding="utf-8")
         error = MODULE.validate_diff(self.repo, self.base_sha, MODULE.changed_paths(self.repo, self.base_sha))
         self.assertIn("secret potentiel", error or "")
+
+    def test_validate_diff_rejects_private_identifiers_in_added_lines(self) -> None:
+        (self.repo / "docs/guide.md").write_text(
+            "Internal endpoint: http://prod-db-01.internal/ at 10.23.45.67 owned by adminuser\n",
+            encoding="utf-8",
+        )
+        error = MODULE.validate_diff(self.repo, self.base_sha, ["docs/guide.md"])
+        self.assertIn("identifiant privé potentiel", error or "")
 
     def test_validate_diff_requires_test_for_controller_change(self) -> None:
         controller = "scripts/daily-security-audit.py"
@@ -339,6 +364,22 @@ class DailyMaintenanceTests(unittest.TestCase):
         later_state = MODULE.state_paths(self.paths, "2026-07-31")
         MODULE.atomic_write(later_state["result"], "x" * 5000)
         self.assertEqual(len(MODULE.report(paths=self.paths, now=later)), 4000)
+
+        running_day = dt.datetime(2026, 8, 1, 9, 0, tzinfo=dt.timezone.utc)
+        running_state = MODULE.state_paths(self.paths, "2026-08-01")
+        MODULE.atomic_write(running_state["running"], "active")
+        self.assertEqual(MODULE.report(paths=self.paths, now=running_day), "")
+        self.assertFalse(running_state["reported"].exists())
+        MODULE.atomic_write(running_state["result"], "final")
+        self.assertEqual(MODULE.report(paths=self.paths, now=running_day), "final")
+        self.assertEqual(MODULE.report(paths=self.paths, now=running_day), "")
+
+        missing_day = dt.datetime(2026, 8, 2, 9, 0, tzinfo=dt.timezone.utc)
+        missing_state = MODULE.state_paths(self.paths, "2026-08-02")
+        self.assertIn("Aucun résultat", MODULE.report(paths=self.paths, now=missing_day))
+        MODULE.atomic_write(missing_state["result"], "late-final")
+        self.assertEqual(MODULE.report(paths=self.paths, now=missing_day), "")
+        self.assertFalse(missing_state["result"].exists())
 
     def test_repository_preflight_requires_clean_main_and_exact_wrapper(self) -> None:
         self.assertIsNone(MODULE.repository_preflight(self.paths))

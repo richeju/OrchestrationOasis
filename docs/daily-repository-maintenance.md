@@ -19,9 +19,9 @@ A human review and green GitHub-hosted CI remain mandatory.
 All times use `Europe/Paris`:
 
 - **10:00** — a no-agent cron script starts a bounded transient user-systemd worker;
-- **11:00** — a no-agent cron script reads and delivers the deterministic result.
+- **11:00 and 11:15** — the same no-agent cron script attempts to read and deliver the deterministic terminal result; it stays silent while the worker is active.
 
-The worker has a 50-minute internal timeout. systemd enforces a 55-minute outer limit, kills the full control group, caps memory at 3 GiB, and caps tasks. The report is produced once; the implementation does not claim that WhatsApp delivery succeeded merely because the reporter printed output.
+The worker has a 50-minute internal timeout. systemd enforces a 55-minute outer limit, kills the full control group, caps memory at 3 GiB, and caps tasks. Only one terminal report is produced; provisional running messages are never emitted, and the implementation does not claim that WhatsApp delivery succeeded merely because the reporter printed output.
 
 ## Security model
 
@@ -45,7 +45,7 @@ The worker has a 50-minute internal timeout. systemd enforces a 55-minute outer 
 
 Commands are passed as argument arrays, never through a model-authored shell string. The branch name, commit message, PR title, and PR body are deterministic.
 
-Host Git mutation is serialized by a separate repository lock. External diff/textconv drivers, hooks, and signing are disabled. Candidate bytes are staged with `hash-object --no-filters` plus `update-index`; the commit is built with `write-tree` and `commit-tree`, not porcelain `git add`/`git commit`.
+Host Git mutation is serialized by a separate repository lock. External diff/textconv drivers, hooks, and signing are disabled. Network Git commands use the validated literal HTTPS URL rather than the mutable local remote name, and `gh` commands receive the literal repository identifier. Candidate bytes are staged with `hash-object --no-filters` plus `update-index`; the commit is built with `write-tree` and `commit-tree`, not porcelain `git add`/`git commit`.
 
 ### Hermes sandbox
 
@@ -111,6 +111,7 @@ The VPS applies only non-executing checks to model-authored content:
 - at most 80 KiB and 800 diff lines;
 - `git diff --check`;
 - deterministic secret-pattern rejection.
+- deterministic rejection, on added lines, of URLs, IP literals, private-suffix hostnames, explicit user/owner assignments, and user-home paths.
 
 The candidate is then pushed as `daily/YYYY-MM-DD-maintenance` and opened as a PR. GitHub Actions runs `make check` and security scanning on GitHub-hosted `ubuntu-latest` runners. The worker never merges the PR, even if CI passes.
 
@@ -141,7 +142,7 @@ The public repository intentionally does not write private Hermes profile or cro
 2. configure and validate the canonical repository's fetch and push URL as `https://github.com/richeju/OrchestrationOasis.git`, then pre-pull the controller's digest-pinned Hermes Docker image;
 3. install the exact documented Docker wrapper in `~/.hermes/bin/daily-maintenance/docker`, with both wrapper and parent directory mode `0700`;
 4. copy the reviewed controller source to the three private entry-point paths with mode `0700`;
-5. register exactly two private no-agent jobs at `0 10 * * *` and `0 11 * * *`;
+5. register exactly two private no-agent jobs at `0 10 * * *` and `0,15 11 * * *`;
 6. compare checksums and inspect the registered schedules before enabling the first run.
 
 Exact wrapper content:
