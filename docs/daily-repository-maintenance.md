@@ -48,7 +48,7 @@ Host Git mutation is serialized by a separate repository lock. External diff/tex
 
 ### Hermes sandbox
 
-The dedicated Hermes profile is `dailymaintainer`. It is created as a minimal `--no-skills` profile rather than cloned wholesale. Its configuration has no external skill directories or credential-file passthroughs. Before every launch, the controller fails closed if those settings appear or if any file exists under profile skills, plugins, upload/media/delegation caches, or legacy cache paths that Hermes would auto-mount. Its model process runs on the host only to call the provider. No skill is loaded for the run; the enabled model tools are limited to `terminal` and `file`, and both are routed through Hermes' Docker backend.
+The dedicated Hermes profile is `dailymaintainer`. It is created as a minimal `--no-skills` profile rather than cloned wholesale. Its configuration has no external skill directories or credential-file passthroughs. Before every launch, the controller fails closed if those settings appear or if any file exists under profile skills, plugins, upload/media/delegation caches, or legacy cache paths that Hermes would auto-mount. Its model process runs on the host only to call the explicitly pinned `openai-codex` provider/model. Every run uses `--ignore-rules`, so profile SOUL/memory and repository AGENTS/rules are not injected. No skill is loaded; the enabled model tools are limited to `terminal` and `file`, and both are routed through Hermes' Docker backend.
 
 The sandbox has:
 

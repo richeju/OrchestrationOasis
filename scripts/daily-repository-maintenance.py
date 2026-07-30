@@ -35,6 +35,8 @@ DEFAULT_PROFILE_HOME = Path("/home/debian/.hermes/profiles/dailymaintainer")
 DEFAULT_DOCKER_WRAPPER = Path("/home/debian/.hermes/bin/daily-maintenance/docker")
 DOCKER_WRAPPER_CONTENT = '#!/bin/sh\nexec /usr/bin/sudo -n /usr/bin/docker "$@"\n'
 HERMES_PROFILE = "dailymaintainer"
+HERMES_PROVIDER = "openai-codex"
+HERMES_MODEL = "gpt-5.6-sol"
 WORKER_TIMEOUT_SECONDS = 50 * 60
 MAX_COMMAND_OUTPUT = 200_000
 MAX_DIFF_BYTES = 80_000
@@ -557,6 +559,16 @@ def sandbox_environment(paths: Paths, worktree: Path, evidence_file: Path) -> di
     return env
 
 
+def hermes_worker_command(paths: Paths) -> list[str]:
+    return [
+        str(paths.hermes), "-p", HERMES_PROFILE,
+        "--ignore-rules", "-m", HERMES_MODEL, "--provider", HERMES_PROVIDER,
+        "chat", "-Q", "-t", "terminal,file",
+        "--source", "daily-repository-maintenance",
+        "-q", paths.prompt.read_text(encoding="utf-8"),
+    ]
+
+
 def changed_paths(worktree: Path, base_sha: str) -> list[str]:
     tracked = run_command(git_argv("diff", "--no-ext-diff", "--no-textconv", "--name-only", "-z", base_sha), cwd=worktree)
     untracked = run_command(git_argv("ls-files", "--others", "--exclude-standard", "-z"), cwd=worktree)
@@ -767,12 +779,7 @@ def run_worker(*, paths: Paths | None = None, now: dt.datetime | None = None) ->
         evidence = collect_evidence(paths)
         evidence_file = worktree / ".daily-evidence.json"
         atomic_write(evidence_file, json.dumps(evidence, sort_keys=True), mode=0o600)
-        command = [
-            str(paths.hermes), "-p", HERMES_PROFILE,
-            "chat", "-Q",
-            "-t", "terminal,file", "--source", "daily-repository-maintenance",
-            "-q", paths.prompt.read_text(encoding="utf-8"),
-        ]
+        command = hermes_worker_command(paths)
         code = run_quiet_process(command, cwd=paths.repository, env=sandbox_environment(paths, worktree, evidence_file), timeout=WORKER_TIMEOUT_SECONDS)
         evidence_file.unlink(missing_ok=True)
         if code != 0:

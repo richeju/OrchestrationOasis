@@ -129,6 +129,14 @@ class DailyMaintenanceTests(unittest.TestCase):
         )
         self.assertIn("credential passthrough", MODULE.profile_isolation_preflight(self.paths) or "")
 
+    def test_worker_command_pins_provider_and_ignores_host_rules(self) -> None:
+        command = MODULE.hermes_worker_command(self.paths)
+        self.assertIn("--ignore-rules", command)
+        self.assertEqual(command[command.index("--provider") + 1], "openai-codex")
+        self.assertEqual(command[command.index("-m") + 1], "gpt-5.6-sol")
+        self.assertNotIn("-s", command)
+        self.assertEqual(command[command.index("-t") + 1], "terminal,file")
+
     def test_sandbox_is_air_gapped_and_does_not_forward_credentials(self) -> None:
         evidence = self.root / "evidence.json"
         evidence.write_text("{}", encoding="utf-8")
