@@ -70,11 +70,13 @@ at 03:45. The implementation and safeguards are documented in
 [`weekly-conditional-reboot.md`](weekly-conditional-reboot.md).
 
 Daily repository maintenance is launched at 10:00 after the 08:00 security
-audit. Logs, container health, CI messages, issues, and documented debt are
-ranked as evidence for at most one low-risk bugfix or improvement. Work uses a
-`daily/*` branch and mandatory PR/check/scan gates; sensitive infrastructure
-changes remain human-approved. The bounded worker and reporting pipeline are
-documented in
+audit. Bounded log categories, container state counts, normalized CI states,
+and documented debt prioritize at most one candidate. Hermes edits only a
+disposable tmpfs worktree through an air-gapped Docker backend; the host
+discards model output and applies a deterministic path/diff/secret policy.
+Accepted work is published as an unmerged `daily/*` PR, and candidate code runs
+only on GitHub-hosted CI. Sensitive infrastructure changes remain excluded.
+The 11:00 deterministic report and full safeguards are documented in
 [`daily-repository-maintenance.md`](daily-repository-maintenance.md).
 
 ## Change rule

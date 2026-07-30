@@ -1,87 +1,181 @@
-# Daily autonomous repository maintenance
+# Daily repository maintenance
 
-Hermes performs one bounded maintenance assessment per day for `richeju/OrchestrationOasis`. It may fix one demonstrated bug, implement one low-risk improvement, finish an existing daily PR, or explicitly abstain.
+## Purpose
 
-## Schedule and execution model
+Run one bounded maintenance candidate every day for `richeju/OrchestrationOasis`, using recent operational signals to prioritize a bugfix, test improvement, or documentation improvement.
+
+The system is intentionally **PR-only**:
+
+- no automatic merge;
+- no deployment;
+- no direct infrastructure mutation;
+- no execution of model-authored code on the VPS;
+- no raw logs or model-authored prose delivered to WhatsApp.
+
+A human review and green GitHub-hosted CI remain mandatory.
+
+## Schedule
 
 All times use `Europe/Paris`:
 
-- `08:00`: deterministic VPS and UniFi security audit;
-- `10:00`: launch the repository-maintenance worker;
-- `10:45`: deliver the result if complete;
-- `11:15`: fallback delivery if the first reporter was silent while work continued.
+- **10:00** — a no-agent cron script starts a bounded transient user-systemd worker;
+- **11:00** — a no-agent cron script reads and delivers the deterministic result.
 
-A normal Hermes cron-agent has a three-minute hard limit, which is too short for repository checks and GitHub CI. The 10:00 no-agent cron therefore launches a transient **user systemd service**. The service runs for at most 55 minutes and the nested Hermes command has a 50-minute timeout. Reporter jobs only read the bounded result file and deliver it verbatim; they never reason over or mutate the repository.
+The worker has a 50-minute internal timeout. systemd enforces a 55-minute outer limit, kills the full control group, caps memory at 3 GiB, and caps tasks. The report is produced once; the implementation does not claim that WhatsApp delivery succeeded merely because the reporter printed output.
 
-The versioned implementation is [`scripts/daily-repository-maintenance.py`](../scripts/daily-repository-maintenance.py). It is installed under three explicit names:
+## Security model
+
+### Deterministic host controller
+
+`scripts/daily-repository-maintenance.py` performs only fixed operations:
+
+1. require the canonical checkout to be clean and on `main`;
+2. fetch `origin/main`;
+3. stop if an open `daily/*` PR already exists;
+4. create a disposable worktree under `/dev/shm/infraforge-daily-maintenance/<date>`;
+5. collect bounded aggregate evidence;
+6. run Hermes with all model tools routed into an air-gapped Docker sandbox;
+7. discard model stdout/stderr;
+8. remove the evidence file;
+9. validate changed paths, file types, size, whitespace, and secret patterns without executing candidate code;
+10. commit and push only an accepted candidate using fixed command arguments;
+11. open a PR with a fixed body and no auto-merge;
+12. leave execution of the candidate to GitHub-hosted CI.
+
+Commands are passed as argument arrays, never through a model-authored shell string. The branch name, commit message, PR title, and PR body are deterministic.
+
+### Hermes sandbox
+
+The dedicated Hermes profile is `dailymaintainer`. Its model process runs on the host only to call the provider. The enabled model tools are limited to `terminal` and `file`, and both are routed through Hermes' Docker backend.
+
+The sandbox has:
+
+- `--network=none` through `TERMINAL_DOCKER_NETWORK=false`;
+- no forwarded environment variables or GitHub credentials;
+- a fresh per-process container;
+- CPU and memory limits;
+- only the disposable worktree mounted read-write;
+- `.git` metadata mounted read-only;
+- the aggregate evidence file mounted read-only;
+- no canonical checkout, host home, SSH configuration, `gh` authentication, OpenBao data, or service sockets.
+
+The worktree uses bounded tmpfs rather than the VPS root filesystem, limiting disk-filling impact.
+
+### Evidence from logs and operations
+
+The controller examines a bounded 24-hour window but **never passes raw messages to the model**.
+
+It converts journal messages into fixed categories such as:
+
+- authentication failure;
+- connection failure;
+- disk pressure;
+- out-of-memory;
+- permission denied;
+- rate limit;
+- segmentation fault;
+- timeout;
+- TLS failure;
+- unhealthy service;
+- other warning.
+
+Only category counts, normalized unit families, Docker state counts, normalized GitHub workflow states, and an open-issue count enter `.daily-evidence.json`. Issue titles/bodies, CI logs, journal text, IP addresses, hostnames, usernames, URLs, and credentials do not enter the sandbox or repository changes.
+
+This satisfies the requirement to use messages and logs as evidence while preventing prompt injection and sensitive-data copying.
+
+## Candidate policy
+
+The model may modify at most three **existing** files in these scopes:
+
+- `docs/**/*.md`;
+- `scripts/tests/**/*.py`;
+- `scripts/tests/**/*.sh`;
+- `scripts/daily-security-audit.py`.
+
+Additional filename deny rules exclude maintenance, deployment, patching, reboot, backup, inventory, and safety-control paths. New files, symlinks, binary patches, workflow changes, Ansible, requirements, Makefiles, automation controls, and large diffs are rejected.
+
+For a code change, the candidate must update an existing regression test. If no useful and provable task fits the policy, abstention is the correct daily result.
+
+## Validation and publication
+
+The VPS applies only non-executing checks to model-authored content:
+
+- allowlisted existing paths only;
+- no symlink or binary;
+- at most 80 KiB and 800 diff lines;
+- `git diff --check`;
+- deterministic secret-pattern rejection.
+
+The candidate is then pushed as `daily/YYYY-MM-DD-maintenance` and opened as a PR. GitHub Actions runs `make check` and security scanning on GitHub-hosted `ubuntu-latest` runners. The worker never merges the PR, even if CI passes.
+
+A rejected or failed candidate worktree is retained in `/dev/shm/infraforge-daily-maintenance/<date>` until reboot or manual investigation. A successful or empty candidate worktree is removed.
+
+## State and idempotency
+
+Private state lives under:
 
 ```text
-/home/debian/.hermes/scripts/daily_repository_maintenance_launcher.py
-/home/debian/.hermes/scripts/daily_repository_maintenance_worker.py
-/home/debian/.hermes/scripts/daily_repository_maintenance_reporter.py
+~/.hermes/state/daily-repository-maintenance/
 ```
 
-The source-of-truth mission prompt is [`automation/prompts/daily-repository-maintenance.md`](../automation/prompts/daily-repository-maintenance.md).
+Daily files:
 
-## Logs are first-class evidence
+- `<date>.launching` — launcher reservation;
+- `<date>.running` — worker active;
+- `<date>.result` — deterministic WhatsApp report payload.
 
-Candidate selection must account for messages and state from:
+A filesystem lock serializes launcher, worker, and reporter state transitions. Repeated launcher invocations for the same day are no-ops once launching, running, or result state exists.
 
-- the deterministic daily security audit;
-- bounded journald warnings/errors over the last 24 hours;
-- bounded Hermes gateway warnings/errors;
-- Docker health and bounded recent logs only for a failing container;
-- recent GitHub CI and Maintenance workflow status/failure logs;
-- issues, technical debt, TODO/FIXME markers, and tests.
+## Runtime deployment boundary
 
-The worker records only a structured, sanitized pattern: component, count/severity, time window, and minimal message pattern. A log warning is not automatically a bug. The worker must reproduce or otherwise prove a root cause and distinguish expected noise, transient failures, stale messages, and physical-only interventions.
+The public repository intentionally does not write private Hermes profile or cron state. Runtime installation is an explicit out-of-band operator action after the reviewed repository change is merged:
 
-Raw authentication logs, request headers, query strings, client trails, usernames, session IDs, credentials, tokens, repository credentials, and complete log dumps are excluded from reports and PRs.
+1. create/refresh the dedicated `dailymaintainer` profile from the audited default provider configuration;
+2. pre-pull the pinned/default Hermes Docker backend image;
+3. copy the reviewed controller source to the three private entry-point paths with mode `0700`;
+4. register exactly two private no-agent jobs at `0 10 * * *` and `0 11 * * *`;
+5. compare checksums and inspect the registered schedules before enabling the first run.
 
-## Selection and Git lifecycle
-
-Only one coherent action is allowed per day. Priority is:
-
-1. reproducible bug or security/correctness issue shown by logs or CI;
-2. demonstrated automation regression or flake;
-3. missing regression test for an observed failure;
-4. bounded parser/script robustness improvement;
-5. factual documentation drift;
-6. abstention.
-
-The worker refuses to start from a dirty tree or a branch other than `main`. If a `daily/*` PR already exists, that PR is the only allowed task for the day. New work uses a `daily/YYYY-MM-DD-short-topic` branch, updates tests/documentation, and must pass targeted tests, `git diff --check`, `make check`, and `make scan` before publication.
-
-Automatic merge is allowed only for a low-risk, reversible change with all required checks green and no unresolved review finding. GitHub merge never implies live deployment; the report must say `not deployed` unless live convergence was separately performed and verified.
-
-## Prohibited autonomous changes
-
-The worker cannot autonomously mutate:
-
-- firewall, SSH, VPN, WAN/LAN, DNS, or UniFi;
-- secrets, OpenBao policies, authentication data, or Restic repositories/restoration;
-- storage, destructive migrations, or data deletion;
-- service/Hermes reboot or shutdown;
-- physical-only work such as `AUD-0-SW` adoption;
-- infrastructure requiring an outage.
-
-These require explicit human approval and a recovery plan.
-
-## State and concurrency
-
-State is stored mode `0700` under:
-
-```text
-/home/debian/.hermes/state/daily-repository-maintenance/
-```
-
-Daily running/result/delivered files are mode `0600`. An exclusive lock prevents concurrent workers. Reports are delivered once; the first reporter stays silent while a recent worker remains active, and the fallback reports a missing or overlong run.
-
-## Validation
+Read-only drift check:
 
 ```bash
-python3 scripts/tests/daily-repository-maintenance.test.py
-make check
-make scan
+sha256sum scripts/daily-repository-maintenance.py \
+  ~/.hermes/scripts/daily_repository_maintenance_launcher.py \
+  ~/.hermes/scripts/daily_repository_maintenance_worker.py \
+  ~/.hermes/scripts/daily_repository_maintenance_reporter.py
+stat -c '%a %U:%G %n' ~/.hermes/scripts/daily_repository_maintenance_*.py
+hermes cron list
 ```
 
-Tests cover dirty-tree refusal, bounded systemd launch, worker result handling, removal of Hermes CLI session metadata, one-time delivery, and silent/reported long-running states.
+All four checksums must match, all private entry points must be owned by `debian` with mode `700`, and only the launcher and reporter are cron scripts. The worker is started by the launcher through systemd.
+
+## Installed entry points
+
+The same audited source is installed under three mode-specific names:
+
+```text
+~/.hermes/scripts/daily_repository_maintenance_launcher.py
+~/.hermes/scripts/daily_repository_maintenance_worker.py
+~/.hermes/scripts/daily_repository_maintenance_reporter.py
+```
+
+The cron scheduler executes the launcher and reporter in `no_agent` mode. The long-running worker is tracked by the user systemd manager and does not depend on the cron agent process remaining alive.
+
+## Manual checks
+
+```bash
+# Run repository tests and scans for the controller itself
+make check
+make scan
+
+# Inspect private state
+find ~/.hermes/state/daily-repository-maintenance -maxdepth 1 -type f -print
+
+# Inspect transient worker status
+systemctl --user list-units 'infraforge-daily-maintenance-*'
+
+# Inspect retained rejected candidates
+find /dev/shm/infraforge-daily-maintenance -maxdepth 2 -type f -print
+```
+
+Do not run the worker manually from a dirty or non-`main` canonical checkout. For testing, use the dedicated test suite and a disposable fixture repository.
