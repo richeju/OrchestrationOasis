@@ -19,6 +19,11 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 from zoneinfo import ZoneInfo
 
+try:
+    import yaml
+except ImportError:  # Fail closed in profile_isolation_preflight().
+    yaml = None
+
 PARIS = ZoneInfo("Europe/Paris")
 DEFAULT_STATE_ROOT = Path("/home/debian/.hermes/state/daily-repository-maintenance")
 DEFAULT_WORKTREE_ROOT = Path("/dev/shm/infraforge-daily-maintenance")
@@ -26,6 +31,7 @@ DEFAULT_REPOSITORY = Path("/home/debian/OrchestrationOasis")
 DEFAULT_PROMPT = DEFAULT_REPOSITORY / "automation/prompts/daily-repository-maintenance.md"
 DEFAULT_HERMES = Path("/home/debian/.local/bin/hermes")
 DEFAULT_WORKER = Path("/home/debian/.hermes/scripts/daily_repository_maintenance_worker.py")
+DEFAULT_PROFILE_HOME = Path("/home/debian/.hermes/profiles/dailymaintainer")
 HERMES_PROFILE = "dailymaintainer"
 WORKER_TIMEOUT_SECONDS = 50 * 60
 MAX_COMMAND_OUTPUT = 200_000
@@ -90,6 +96,7 @@ class Paths:
     prompt: Path
     hermes: Path
     worker: Path
+    profile_home: Path
 
 
 @dataclass(frozen=True)
@@ -107,6 +114,7 @@ def paths_from_env(env: Mapping[str, str] | None = None) -> Paths:
         Path(values.get("DAILY_MAINTENANCE_PROMPT", DEFAULT_PROMPT)),
         Path(values.get("DAILY_MAINTENANCE_HERMES", DEFAULT_HERMES)),
         Path(values.get("DAILY_MAINTENANCE_WORKER", DEFAULT_WORKER)),
+        Path(values.get("DAILY_MAINTENANCE_PROFILE_HOME", DEFAULT_PROFILE_HOME)),
     )
 
 
@@ -261,6 +269,52 @@ def repository_preflight(paths: Paths) -> str | None:
         return "checkout canonique non propre"
     if not paths.prompt.is_file() or not os.access(paths.hermes, os.X_OK):
         return "prompt versionné ou binaire Hermes absent"
+    profile_error = profile_isolation_preflight(paths)
+    if profile_error:
+        return profile_error
+    return None
+
+
+def profile_isolation_preflight(paths: Paths) -> str | None:
+    if yaml is None:
+        return "parseur YAML indisponible pour valider le profil isolé"
+    config_path = paths.profile_home / "config.yaml"
+    if not config_path.is_file():
+        return "profil Hermes isolé absent"
+    try:
+        config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    except (OSError, ValueError, yaml.YAMLError):
+        return "configuration du profil isolé invalide"
+    if not isinstance(config, dict):
+        return "configuration du profil isolé invalide"
+    skills: dict[str, Any] = {}
+    terminal: dict[str, Any] = {}
+    if isinstance(config.get("skills"), dict):
+        skills = config["skills"]
+    if isinstance(config.get("terminal"), dict):
+        terminal = config["terminal"]
+    if skills.get("external_dirs") not in (None, []):
+        return "external skills interdits dans le profil isolé"
+    if terminal.get("credential_files") not in (None, []):
+        return "credential passthrough interdit dans le profil isolé"
+
+    auto_mounted_roots = (
+        "skills", "plugins", "cache/documents", "cache/images", "cache/audio",
+        "cache/videos", "cache/screenshots", "cache/web", "cache/delegation",
+        "document_cache", "image_cache", "audio_cache", "video_cache",
+        "browser_screenshots", "web_cache", "delegation_cache",
+    )
+    for relative in auto_mounted_roots:
+        root = paths.profile_home / relative
+        if not root.exists():
+            continue
+        if root.is_symlink() or root.is_file():
+            return "contenu auto-monté interdit dans le profil isolé"
+        try:
+            if any(entry.is_file() or entry.is_symlink() for entry in root.rglob("*")):
+                return "contenu auto-monté interdit dans le profil isolé"
+        except OSError:
+            return "contenu du profil isolé non vérifiable"
     return None
 
 
@@ -434,6 +488,10 @@ def sandbox_environment(paths: Paths, worktree: Path, evidence_file: Path) -> di
         "TERMINAL_DOCKER_ORPHAN_REAPER": "true",
         "TERMINAL_DOCKER_MOUNT_CWD_TO_WORKSPACE": "false",
         "TERMINAL_DOCKER_FORWARD_ENV": "[]",
+        "TERMINAL_DOCKER_ENV": "{}",
+        "TERMINAL_DOCKER_EXTRA_ARGS": "[]",
+        "TERMINAL_DOCKER_RUN_AS_HOST_USER": "false",
+        "TERMINAL_CONTAINER_PERSISTENT": "false",
         "TERMINAL_CONTAINER_CPU": "2",
         "TERMINAL_CONTAINER_MEMORY": "2048",
         "TERMINAL_TIMEOUT": "120",
@@ -567,7 +625,7 @@ def run_worker(*, paths: Paths | None = None, now: dt.datetime | None = None) ->
         atomic_write(evidence_file, json.dumps(evidence, sort_keys=True), mode=0o600)
         command = [
             str(paths.hermes), "-p", HERMES_PROFILE,
-            "-s", "software-engineering-workflows", "chat", "-Q",
+            "chat", "-Q",
             "-t", "terminal,file", "--source", "daily-repository-maintenance",
             "-q", paths.prompt.read_text(encoding="utf-8"),
         ]

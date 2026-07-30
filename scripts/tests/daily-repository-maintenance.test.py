@@ -52,6 +52,12 @@ class DailyMaintenanceTests(unittest.TestCase):
         self.worker = self.root / "daily_repository_maintenance_worker.py"
         self.worker.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         self.worker.chmod(0o700)
+        self.profile_home = self.root / "profile"
+        self.profile_home.mkdir()
+        (self.profile_home / "config.yaml").write_text(
+            "skills:\n  external_dirs: []\nterminal:\n  credential_files: []\n",
+            encoding="utf-8",
+        )
         self.paths = MODULE.Paths(
             state_root=self.root / "state",
             worktree_root=self.root / "worktrees",
@@ -59,6 +65,7 @@ class DailyMaintenanceTests(unittest.TestCase):
             prompt=self.repo / "automation/prompts/daily-repository-maintenance.md",
             hermes=self.hermes,
             worker=self.worker,
+            profile_home=self.profile_home,
         )
 
     def tearDown(self) -> None:
@@ -74,6 +81,19 @@ class DailyMaintenanceTests(unittest.TestCase):
         self.assertNotIn("IGNORE", json.dumps(MODULE.collect_evidence.__annotations__))
         self.assertEqual(MODULE.classify_unit("attacker-controlled.service"), "other")
 
+    def test_profile_preflight_rejects_automatic_mount_sources(self) -> None:
+        self.assertIsNone(MODULE.profile_isolation_preflight(self.paths))
+        cache = self.profile_home / "cache/documents"
+        cache.mkdir(parents=True)
+        (cache / "upload.txt").write_text("private", encoding="utf-8")
+        self.assertIn("auto-monté", MODULE.profile_isolation_preflight(self.paths) or "")
+        (cache / "upload.txt").unlink()
+        (self.profile_home / "config.yaml").write_text(
+            "terminal:\n  credential_files: [oauth.json]\n",
+            encoding="utf-8",
+        )
+        self.assertIn("credential passthrough", MODULE.profile_isolation_preflight(self.paths) or "")
+
     def test_sandbox_is_air_gapped_and_does_not_forward_credentials(self) -> None:
         evidence = self.root / "evidence.json"
         evidence.write_text("{}", encoding="utf-8")
@@ -84,6 +104,9 @@ class DailyMaintenanceTests(unittest.TestCase):
             env = MODULE.sandbox_environment(self.paths, worktree, evidence)
         self.assertEqual(env["TERMINAL_DOCKER_NETWORK"], "false")
         self.assertEqual(env["TERMINAL_DOCKER_FORWARD_ENV"], "[]")
+        self.assertEqual(env["TERMINAL_DOCKER_ENV"], "{}")
+        self.assertEqual(env["TERMINAL_DOCKER_EXTRA_ARGS"], "[]")
+        self.assertEqual(env["TERMINAL_CONTAINER_PERSISTENT"], "false")
         self.assertNotIn("GITHUB_TOKEN", env)
         self.assertNotIn("OPENAI_API_KEY", env)
         mounts = json.loads(env["TERMINAL_DOCKER_VOLUMES"])

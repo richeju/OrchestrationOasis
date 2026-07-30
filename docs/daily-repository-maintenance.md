@@ -46,12 +46,12 @@ Commands are passed as argument arrays, never through a model-authored shell str
 
 ### Hermes sandbox
 
-The dedicated Hermes profile is `dailymaintainer`. Its model process runs on the host only to call the provider. The enabled model tools are limited to `terminal` and `file`, and both are routed through Hermes' Docker backend.
+The dedicated Hermes profile is `dailymaintainer`. It is created as a minimal `--no-skills` profile rather than cloned wholesale. Its configuration has no external skill directories or credential-file passthroughs. Before every launch, the controller fails closed if those settings appear or if any file exists under profile skills, plugins, upload/media/delegation caches, or legacy cache paths that Hermes would auto-mount. Its model process runs on the host only to call the provider. No skill is loaded for the run; the enabled model tools are limited to `terminal` and `file`, and both are routed through Hermes' Docker backend.
 
 The sandbox has:
 
 - `--network=none` through `TERMINAL_DOCKER_NETWORK=false`;
-- no forwarded environment variables or GitHub credentials;
+- no forwarded environment variables, literal Docker environment, extra Docker arguments, skill mounts, cache data, or GitHub credentials;
 - a fresh per-process container;
 - CPU and memory limits;
 - only the disposable worktree mounted read-write;
@@ -130,7 +130,7 @@ A filesystem lock serializes launcher, worker, and reporter state transitions. R
 
 The public repository intentionally does not write private Hermes profile or cron state. Runtime installation is an explicit out-of-band operator action after the reviewed repository change is merged:
 
-1. create/refresh the dedicated `dailymaintainer` profile from the audited default provider configuration;
+1. create the dedicated `dailymaintainer` profile with `--no-skills`, configure only the selected model/provider authentication, and keep `skills.external_dirs` plus `terminal.credential_files` empty;
 2. pre-pull the pinned/default Hermes Docker backend image;
 3. copy the reviewed controller source to the three private entry-point paths with mode `0700`;
 4. register exactly two private no-agent jobs at `0 10 * * *` and `0 11 * * *`;
