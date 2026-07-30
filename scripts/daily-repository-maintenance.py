@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -37,6 +38,10 @@ DOCKER_WRAPPER_CONTENT = '#!/bin/sh\nexec /usr/bin/sudo -n /usr/bin/docker "$@"\
 HERMES_PROFILE = "dailymaintainer"
 HERMES_PROVIDER = "openai-codex"
 HERMES_MODEL = "gpt-5.6-sol"
+HERMES_DOCKER_IMAGE = (
+    "nikolaik/python-nodejs:python3.11-nodejs20@"
+    "sha256:8f958bdc1b4a422bfafd97cab4f69836401f616ae985d4b57a53d254f5bcb038"
+)
 WORKER_TIMEOUT_SECONDS = 50 * 60
 MAX_COMMAND_OUTPUT = 200_000
 MAX_DIFF_BYTES = 80_000
@@ -324,25 +329,30 @@ def repository_preflight(paths: Paths) -> str | None:
 def profile_isolation_preflight(paths: Paths) -> str | None:
     if yaml is None:
         return "parseur YAML indisponible pour valider le profil isolé"
-    config_path = paths.profile_home / "config.yaml"
-    if not config_path.is_file():
+    if not paths.profile_home.is_dir():
         return "profil Hermes isolé absent"
-    try:
-        config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-    except (OSError, ValueError, yaml.YAMLError):
-        return "configuration du profil isolé invalide"
-    if not isinstance(config, dict):
-        return "configuration du profil isolé invalide"
+    config_path = paths.profile_home / "config.yaml"
+    config: dict[str, Any] = {}
+    if config_path.exists():
+        if config_path.is_symlink() or not config_path.is_file():
+            return "configuration du profil isolé invalide"
+        try:
+            loaded = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        except (OSError, ValueError, yaml.YAMLError):
+            return "configuration du profil isolé invalide"
+        if not isinstance(loaded, dict):
+            return "configuration du profil isolé invalide"
+        config = loaded
+    if "terminal" in config:
+        return "section terminal interdite dans le profil isolé"
     skills: dict[str, Any] = {}
-    terminal: dict[str, Any] = {}
+
     if isinstance(config.get("skills"), dict):
         skills = config["skills"]
-    if isinstance(config.get("terminal"), dict):
-        terminal = config["terminal"]
+
     if skills.get("external_dirs") not in (None, []):
         return "external skills interdits dans le profil isolé"
-    if terminal.get("credential_files") not in (None, []):
-        return "credential passthrough interdit dans le profil isolé"
+
 
     auto_mounted_roots = (
         "skills", "plugins", "cache/documents", "cache/images", "cache/audio",
@@ -513,6 +523,9 @@ def prepare_worktree(paths: Paths, day: str) -> tuple[Path | None, str | None, s
     base_sha = resolved.stdout.strip()
     if resolved.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40}", base_sha):
         return None, None, "SHA origin/main non vérifiable"
+    head = run_command(git_argv("rev-parse", "--verify", "HEAD^{commit}"), cwd=paths.repository)
+    if head.returncode != 0 or head.stdout.strip() != base_sha:
+        return None, None, "checkout canonique non aligné avec origin/main"
     path = paths.worktree_root / day
     branch = f"daily/{day}-maintenance"
     if path.exists():
@@ -534,6 +547,7 @@ def sandbox_environment(paths: Paths, worktree: Path, evidence_file: Path) -> di
         "TERMINAL_ENV": "docker",
         "TERMINAL_CWD": "/workspace",
         "TERMINAL_DOCKER_NETWORK": "false",
+        "TERMINAL_DOCKER_IMAGE": HERMES_DOCKER_IMAGE,
         "TERMINAL_DOCKER_PERSIST_ACROSS_PROCESSES": "false",
         "TERMINAL_DOCKER_ORPHAN_REAPER": "true",
         "TERMINAL_DOCKER_MOUNT_CWD_TO_WORKSPACE": "false",
@@ -563,10 +577,39 @@ def hermes_worker_command(paths: Paths) -> list[str]:
     return [
         str(paths.hermes), "-p", HERMES_PROFILE,
         "--ignore-rules", "-m", HERMES_MODEL, "--provider", HERMES_PROVIDER,
-        "chat", "-Q", "-t", "terminal,file",
+        "chat", "-Q", "-t", "terminal",
         "--source", "daily-repository-maintenance",
         "-q", paths.prompt.read_text(encoding="utf-8"),
     ]
+
+
+def profile_container_ids() -> list[str] | None:
+    result = run_command(
+        ["sudo", "-n", "/usr/bin/docker", "ps", "-aq", "--filter", "label=hermes-agent=1", "--filter", f"label=hermes-profile={HERMES_PROFILE}"],
+        timeout=20,
+    )
+    if result.returncode != 0:
+        return None
+    identifiers = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    if any(not re.fullmatch(r"[0-9a-f]{12,64}", identifier) for identifier in identifiers):
+        return None
+    return identifiers
+
+
+def cleanup_profile_containers() -> bool:
+    """Synchronously remove every container owned by the dedicated profile."""
+    for _ in range(4):
+        identifiers = profile_container_ids()
+        if identifiers is None:
+            return False
+        if not identifiers:
+            return True
+        run_command(
+            ["sudo", "-n", "/usr/bin/docker", "rm", "-f", *identifiers],
+            timeout=30,
+        )
+        time.sleep(0.2)
+    return profile_container_ids() == []
 
 
 def changed_paths(worktree: Path, base_sha: str) -> list[str]:
@@ -582,6 +625,10 @@ def validate_diff(worktree: Path, base_sha: str, paths: list[str]) -> str | None
         return None
     if len(paths) > MAX_CHANGED_FILES:
         return "trop de fichiers modifiés"
+    if "scripts/daily-security-audit.py" in paths and not any(
+        relative.startswith("scripts/tests/") for relative in paths
+    ):
+        return "modification du contrôleur sans test de régression"
     for relative in paths:
         if relative == "<git-error>" or relative.startswith("/") or ".." in Path(relative).parts:
             return "chemin de diff invalide"
@@ -644,24 +691,34 @@ def stage_without_filters(worktree: Path, base_sha: str, files: list[str]) -> st
     return None
 
 
-def create_commit_without_hooks(worktree: Path, base_sha: str, branch: str, message: str) -> str | None:
+def create_commit_without_hooks(worktree: Path, base_sha: str, branch: str, message: str) -> tuple[str | None, str | None]:
     tree = run_command(git_argv("write-tree"), cwd=worktree)
     tree_id = tree.stdout.strip()
     if tree.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40}", tree_id):
-        return "création du tree Git impossible"
+        return None, "création du tree Git impossible"
     commit = run_command(git_argv("commit-tree", tree_id, "-p", base_sha, "-m", message), cwd=worktree)
     commit_id = commit.stdout.strip()
     if commit.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40}", commit_id):
-        return "création du commit Git impossible"
+        return None, "création du commit Git impossible"
     updated = run_command(
         git_argv("update-ref", f"refs/heads/{branch}", commit_id, base_sha), cwd=worktree
     )
-    return None if updated.returncode == 0 else "mise à jour déterministe de la branche impossible"
+    if updated.returncode != 0:
+        return None, "mise à jour déterministe de la branche impossible"
+    return commit_id, None
 
 
 def base_is_unchanged(paths: Paths, base_sha: str) -> bool:
+    fetched = run_command(git_argv("fetch", "--no-tags", "origin", "main"), cwd=paths.repository, timeout=120)
+    if fetched.returncode != 0:
+        return False
     resolved = run_command(git_argv("rev-parse", "--verify", "origin/main^{commit}"), cwd=paths.repository)
-    return resolved.returncode == 0 and resolved.stdout.strip() == base_sha and repository_preflight(paths) is None
+    head = run_command(git_argv("rev-parse", "--verify", "HEAD^{commit}"), cwd=paths.repository)
+    return (
+        resolved.returncode == 0 and resolved.stdout.strip() == base_sha
+        and head.returncode == 0 and head.stdout.strip() == base_sha
+        and repository_preflight(paths) is None
+    )
 
 
 def published_pr_for_branch(paths: Paths, branch: str) -> tuple[str | None, str | None]:
@@ -683,14 +740,32 @@ def published_pr_for_branch(paths: Paths, branch: str) -> tuple[str | None, str 
     return None, "URL de PR GitHub invalide"
 
 
-def remote_branch_state(worktree: Path, branch: str) -> bool | None:
+def remote_branch_state(worktree: Path, branch: str) -> tuple[str | None, str | None]:
     result = run_command(
         git_argv("ls-remote", "--heads", "origin", f"refs/heads/{branch}"),
         cwd=worktree, timeout=60,
     )
     if result.returncode != 0:
-        return None
-    return bool(result.stdout.strip())
+        return None, "état de branche distante non vérifiable"
+    if not result.stdout.strip():
+        return None, None
+    match = re.fullmatch(r"([0-9a-f]{40})\trefs/heads/[^\s]+\n?", result.stdout)
+    if not match:
+        return None, "réponse de branche distante invalide"
+    return match.group(1), None
+
+
+def delete_owned_remote_branch(worktree: Path, branch: str, commit_id: str) -> bool:
+    deleted = run_command(
+        git_argv(
+            "push", "--no-verify",
+            f"--force-with-lease=refs/heads/{branch}:{commit_id}",
+            "origin", f":refs/heads/{branch}",
+        ),
+        cwd=worktree,
+        timeout=120,
+    )
+    return deleted.returncode == 0
 
 
 def publish_pr(paths: Paths, worktree: Path, base_sha: str, day: str, files: list[str]) -> tuple[str | None, str | None]:
@@ -698,21 +773,30 @@ def publish_pr(paths: Paths, worktree: Path, base_sha: str, day: str, files: lis
     staging_error = stage_without_filters(worktree, base_sha, files)
     if staging_error:
         return None, staging_error
-    commit_error = create_commit_without_hooks(
+    commit_id, commit_error = create_commit_without_hooks(
         worktree, base_sha, branch, f"chore: daily maintenance candidate {day}"
     )
-    if commit_error:
-        return None, commit_error
-    push = run_command(git_argv("push", "--no-verify", "-u", "origin", branch), cwd=worktree, timeout=120)
+    if commit_error or not commit_id:
+        return None, commit_error or "identifiant du commit déterministe absent"
+    push = run_command(
+        git_argv(
+            "push", "--no-verify", "-u",
+            f"--force-with-lease=refs/heads/{branch}:",
+            "origin", f"{commit_id}:refs/heads/{branch}",
+        ),
+        cwd=worktree,
+        timeout=120,
+    )
     if push.returncode != 0:
-        remote_state = remote_branch_state(worktree, branch)
-        if remote_state is True:
-            rollback = run_command(git_argv("push", "--no-verify", "origin", "--delete", branch), cwd=worktree, timeout=120)
-            if rollback.returncode == 0:
+        remote_commit, remote_error = remote_branch_state(worktree, branch)
+        if remote_error:
+            return None, f"push non confirmé ; {remote_error} ; aucune suppression distante"
+        if remote_commit == commit_id:
+            if delete_owned_remote_branch(worktree, branch, commit_id):
                 return None, "push non confirmé ; branche distante supprimée"
             return None, "push non confirmé ; branche distante potentiellement orpheline"
-        if remote_state is None:
-            return None, "push et état de branche distante non vérifiables"
+        if remote_commit:
+            return None, "push refusé ; branche distante préexistante préservée"
         return None, "push impossible"
     body = (
         "## Daily maintenance candidate\n\n"
@@ -736,8 +820,7 @@ def publish_pr(paths: Paths, worktree: Path, base_sha: str, day: str, files: lis
             return recovered, None
         if lookup_error:
             return None, f"création de PR non confirmée ; {lookup_error} ; branche distante conservée"
-        rollback = run_command(git_argv("push", "--no-verify", "origin", "--delete", branch), cwd=worktree, timeout=120)
-        if rollback.returncode == 0:
+        if delete_owned_remote_branch(worktree, branch, commit_id):
             return None, "création de PR non confirmée ; branche distante supprimée"
         return None, "création de PR non confirmée ; branche distante potentiellement orpheline"
     return url, None
@@ -779,9 +862,24 @@ def run_worker(*, paths: Paths | None = None, now: dt.datetime | None = None) ->
         evidence = collect_evidence(paths)
         evidence_file = worktree / ".daily-evidence.json"
         atomic_write(evidence_file, json.dumps(evidence, sort_keys=True), mode=0o600)
+        if not cleanup_profile_containers():
+            evidence_file.unlink(missing_ok=True)
+            atomic_write(state["result"], "⚠️ Maintenance quotidienne interrompue : conteneur Hermes antérieur non nettoyé.")
+            return 1
         command = hermes_worker_command(paths)
-        code = run_quiet_process(command, cwd=paths.repository, env=sandbox_environment(paths, worktree, evidence_file), timeout=WORKER_TIMEOUT_SECONDS)
-        evidence_file.unlink(missing_ok=True)
+        try:
+            code = run_quiet_process(
+                command,
+                cwd=paths.repository,
+                env=sandbox_environment(paths, worktree, evidence_file),
+                timeout=WORKER_TIMEOUT_SECONDS,
+            )
+        finally:
+            containers_removed = cleanup_profile_containers()
+            evidence_file.unlink(missing_ok=True)
+        if not containers_removed:
+            atomic_write(state["result"], f"⚠️ Maintenance quotidienne interrompue : teardown Docker non confirmé. Worktree conservé : {worktree}")
+            return 1
         if code != 0:
             atomic_write(state["result"], f"⚠️ Maintenance quotidienne : worker isolé en échec (exit={code}). Worktree conservé pour analyse : {worktree}")
             return 1

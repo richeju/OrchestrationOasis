@@ -60,7 +60,7 @@ class DailyMaintenanceTests(unittest.TestCase):
         self.profile_home = self.root / "profile"
         self.profile_home.mkdir()
         (self.profile_home / "config.yaml").write_text(
-            "skills:\n  external_dirs: []\nterminal:\n  credential_files: []\n",
+            "{}\n",
             encoding="utf-8",
         )
         self.docker_wrapper = self.root / "docker-bin/docker"
@@ -124,10 +124,10 @@ class DailyMaintenanceTests(unittest.TestCase):
         self.assertIn("auto-monté", MODULE.profile_isolation_preflight(self.paths) or "")
         (cache / "upload.txt").unlink()
         (self.profile_home / "config.yaml").write_text(
-            "terminal:\n  credential_files: [oauth.json]\n",
+            "terminal:\n  backend: docker\n",
             encoding="utf-8",
         )
-        self.assertIn("credential passthrough", MODULE.profile_isolation_preflight(self.paths) or "")
+        self.assertIn("section terminal interdite", MODULE.profile_isolation_preflight(self.paths) or "")
 
     def test_worker_command_pins_provider_and_ignores_host_rules(self) -> None:
         command = MODULE.hermes_worker_command(self.paths)
@@ -135,7 +135,22 @@ class DailyMaintenanceTests(unittest.TestCase):
         self.assertEqual(command[command.index("--provider") + 1], "openai-codex")
         self.assertEqual(command[command.index("-m") + 1], "gpt-5.6-sol")
         self.assertNotIn("-s", command)
-        self.assertEqual(command[command.index("-t") + 1], "terminal,file")
+        self.assertEqual(command[command.index("-t") + 1], "terminal")
+
+    def test_container_cleanup_is_synchronous_and_fail_closed(self) -> None:
+        container_id = "a" * 12
+        responses = iter(
+            [
+                MODULE.CommandResult(0, container_id + "\n"),
+                MODULE.CommandResult(0, container_id + "\n"),
+                MODULE.CommandResult(0, ""),
+            ]
+        )
+        with mock.patch.object(MODULE, "run_command", side_effect=lambda *_args, **_kwargs: next(responses)) as runner, mock.patch.object(MODULE.time, "sleep"):
+            self.assertTrue(MODULE.cleanup_profile_containers())
+        self.assertIn("rm", runner.call_args_list[1].args[0])
+        with mock.patch.object(MODULE, "run_command", return_value=MODULE.CommandResult(0, "not-an-id\n")):
+            self.assertFalse(MODULE.cleanup_profile_containers())
 
     def test_sandbox_is_air_gapped_and_does_not_forward_credentials(self) -> None:
         evidence = self.root / "evidence.json"
@@ -148,6 +163,8 @@ class DailyMaintenanceTests(unittest.TestCase):
         self.assertEqual(env["TERMINAL_DOCKER_NETWORK"], "false")
         self.assertEqual(env["TERMINAL_DOCKER_FORWARD_ENV"], "[]")
         self.assertEqual(env["TERMINAL_DOCKER_ENV"], "{}")
+        self.assertEqual(env["TERMINAL_ENV"], "docker")
+        self.assertRegex(env["TERMINAL_DOCKER_IMAGE"], r"@sha256:[0-9a-f]{64}$")
         self.assertEqual(
             json.loads(env["TERMINAL_DOCKER_EXTRA_ARGS"]),
             ["--read-only", "--tmpfs", "/root:rw,noexec,nosuid,size=128m"],
@@ -182,6 +199,17 @@ class DailyMaintenanceTests(unittest.TestCase):
         error = MODULE.validate_diff(self.repo, self.base_sha, MODULE.changed_paths(self.repo, self.base_sha))
         self.assertIn("secret potentiel", error or "")
 
+    def test_validate_diff_requires_test_for_controller_change(self) -> None:
+        controller = "scripts/daily-security-audit.py"
+        regression = "scripts/tests/a.test.py"
+        (self.repo / controller).write_text("print('fixed')\n", encoding="utf-8")
+        self.assertIn(
+            "sans test de régression",
+            MODULE.validate_diff(self.repo, self.base_sha, [controller]) or "",
+        )
+        (self.repo / regression).write_text("print('regression')\n", encoding="utf-8")
+        self.assertIsNone(MODULE.validate_diff(self.repo, self.base_sha, [controller, regression]))
+
     def test_validate_diff_enforces_three_file_limit(self) -> None:
         for relative in (
             "docs/guide.md", "docs/other.md", "scripts/daily-security-audit.py", "scripts/tests/a.test.py"
@@ -214,9 +242,9 @@ class DailyMaintenanceTests(unittest.TestCase):
         (self.repo / "docs/guide.md").write_text("safe staged bytes\n", encoding="utf-8")
         self.assertIsNone(MODULE.stage_without_filters(self.repo, self.base_sha, ["docs/guide.md"]))
         self.assertFalse(filter_marker.exists())
-        self.assertIsNone(
-            MODULE.create_commit_without_hooks(self.repo, self.base_sha, "main", "safe")
-        )
+        commit_id, commit_error = MODULE.create_commit_without_hooks(self.repo, self.base_sha, "main", "safe")
+        self.assertIsNone(commit_error)
+        self.assertRegex(commit_id or "", r"^[0-9a-f]{40}$")
         self.assertFalse(filter_marker.exists())
         self.assertFalse(hook_marker.exists())
 
@@ -259,6 +287,33 @@ class DailyMaintenanceTests(unittest.TestCase):
         self.assertEqual(MODULE.run_worker(paths=self.paths, now=now), 1)
         self.assertFalse(state["launching"].exists())
         self.assertTrue(state["result"].exists())
+
+    def test_failed_push_preserves_preexisting_remote_branch(self) -> None:
+        own_commit = "a" * 40
+        other_commit = "b" * 40
+        responses = iter(
+            [
+                MODULE.CommandResult(1, "push rejected"),
+                MODULE.CommandResult(0, f"{other_commit}\trefs/heads/daily/2026-07-30-maintenance\n"),
+            ]
+        )
+        with mock.patch.object(MODULE, "stage_without_filters", return_value=None), mock.patch.object(
+            MODULE, "create_commit_without_hooks", return_value=(own_commit, None)
+        ), mock.patch.object(MODULE, "run_command", side_effect=lambda *_args, **_kwargs: next(responses)) as runner:
+            url, error = MODULE.publish_pr(
+                self.paths, self.repo, self.base_sha, "2026-07-30", ["docs/guide.md"]
+            )
+        self.assertIsNone(url)
+        self.assertIn("préexistante préservée", error or "")
+        self.assertEqual(runner.call_count, 2)
+
+    def test_remote_rollback_uses_exact_sha_lease(self) -> None:
+        commit_id = "c" * 40
+        with mock.patch.object(MODULE, "run_command", return_value=MODULE.CommandResult(0, "")) as runner:
+            self.assertTrue(MODULE.delete_owned_remote_branch(self.repo, "daily/test", commit_id))
+        argv = runner.call_args.args[0]
+        self.assertIn(f"--force-with-lease=refs/heads/daily/test:{commit_id}", argv)
+        self.assertIn(":refs/heads/daily/test", argv)
 
     def test_report_is_deterministic_bounded_and_idempotent(self) -> None:
         now = dt.datetime(2026, 7, 30, 9, 0, tzinfo=dt.timezone.utc)

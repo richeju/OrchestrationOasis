@@ -36,11 +36,12 @@ The worker has a 50-minute internal timeout. systemd enforces a 55-minute outer 
 5. collect bounded aggregate evidence;
 6. run Hermes with all model tools routed into an air-gapped Docker sandbox;
 7. discard model stdout/stderr;
-8. remove the evidence file;
-9. validate changed paths, file types, size, whitespace, and secret patterns against that pinned SHA without executing candidate code;
-10. revalidate the canonical checkout/base, then build and push only an accepted candidate using filter-free Git plumbing;
-11. open a PR with a fixed body and no auto-merge;
-12. leave execution of the candidate to GitHub-hosted CI.
+8. synchronously remove every Docker container for the dedicated profile and verify none remain;
+9. remove the evidence file;
+10. validate changed paths, file types, size, whitespace, and secret patterns against that pinned SHA without executing candidate code;
+11. fetch and revalidate the canonical checkout/base, then build and push only an accepted candidate using filter-free Git plumbing;
+12. open a PR with a fixed body and no auto-merge;
+13. leave execution of the candidate to GitHub-hosted CI.
 
 Commands are passed as argument arrays, never through a model-authored shell string. The branch name, commit message, PR title, and PR body are deterministic.
 
@@ -48,13 +49,13 @@ Host Git mutation is serialized by a separate repository lock. External diff/tex
 
 ### Hermes sandbox
 
-The dedicated Hermes profile is `dailymaintainer`. It is created as a minimal `--no-skills` profile rather than cloned wholesale. Its configuration has no external skill directories or credential-file passthroughs. Before every launch, the controller fails closed if those settings appear or if any file exists under profile skills, plugins, upload/media/delegation caches, or legacy cache paths that Hermes would auto-mount. Its model process runs on the host only to call the explicitly pinned `openai-codex` provider/model. Every run uses `--ignore-rules`, so profile SOUL/memory and repository AGENTS/rules are not injected. No skill is loaded; the enabled model tools are limited to `terminal` and `file`, and both are routed through Hermes' Docker backend.
+The dedicated Hermes profile is `dailymaintainer`. It is created as a minimal `--no-skills` profile rather than cloned wholesale. It has no `terminal:` section at all: in Hermes v0.18.2 any such section overrides inherited sandbox variables and is therefore rejected by preflight. It has no external skill configuration or credential-file passthrough. Before every launch, the controller fails closed if those settings appear or if any file exists under profile skills, plugins, upload/media/delegation caches, or legacy cache paths that Hermes would auto-mount. Its model process runs on the host only to call the explicitly pinned `openai-codex` provider/model. Every run uses `--ignore-rules`, so profile SOUL/memory and repository AGENTS/rules are not injected. No skill is loaded; the only enabled model toolset is `terminal`, routed through Hermes' Docker backend. The `file` toolset is deliberately disabled because Hermes v0.18.2 does not propagate every Docker lifecycle control when it creates an environment first.
 
 The sandbox has:
 
 - `--network=none` through `TERMINAL_DOCKER_NETWORK=false`;
-- no forwarded environment variables, literal Docker environment, extra Docker arguments, or skill/credential/cache data;
-- a fresh per-process container;
+- no host-forwarded environment variables, an empty literal Docker environment, no profile-supplied extra arguments, and no skill/credential/cache data;
+- a fresh per-process container from a registry image pinned by SHA-256 digest;
 - CPU and memory limits;
 - a read-only container root filesystem, with only bounded tmpfs mounts for `/root`, `/tmp`, `/var/tmp`, and `/run`;
 - only the disposable worktree mounted read-write;
@@ -64,7 +65,7 @@ The sandbox has:
 
 The worktree uses host tmpfs rather than the VPS root filesystem, limiting persistent disk-filling impact. The active Docker overlay is ext4-backed and cannot enforce Hermes' requested overlay quota, so the controller explicitly makes the container root filesystem read-only instead of relying on that unsupported quota.
 
-The `debian` account does not receive Docker-group membership and the Docker socket is never mounted. Hermes finds a dedicated host-side `docker` wrapper through a fixed minimal `PATH`; the controller verifies exact wrapper content, owner, file mode `0700`, and parent-directory mode `0700` before launch. The wrapper only executes `/usr/bin/sudo -n /usr/bin/docker` with Hermes-generated backend arguments. Model commands remain inside the resulting container and cannot invoke the host wrapper.
+The `debian` account does not receive Docker-group membership and the Docker socket is never mounted. Hermes finds a dedicated host-side `docker` wrapper through a fixed minimal `PATH`; the controller verifies exact wrapper content, owner, file mode `0700`, and parent-directory mode `0700` before launch. The wrapper only executes `/usr/bin/sudo -n /usr/bin/docker` with Hermes-generated backend arguments. Model commands remain inside the resulting container and cannot invoke the host wrapper. Before launch and again after Hermes exits, the controller synchronously force-removes every container carrying the dedicated `hermes-profile=dailymaintainer` label and then verifies that none remain. Validation and publication are forbidden until that teardown is confirmed.
 
 ### Evidence from logs and operations
 
@@ -111,9 +112,9 @@ The VPS applies only non-executing checks to model-authored content:
 - `git diff --check`;
 - deterministic secret-pattern rejection.
 
-The candidate is then pushed as `daily/YYYY-MM-DD-maintenance` and opened as a PR. GitHub Actions runs `make check` and security scanning on GitHub-hosted `ubuntu-latest` runners. The worker never merges the PR, even if CI passes.
+The candidate is then created remotely as `daily/YYYY-MM-DD-maintenance` with a create-only `--force-with-lease` and opened as a PR. GitHub Actions runs `make check` and security scanning on GitHub-hosted `ubuntu-latest` runners. The worker never merges the PR, even if CI passes.
 
-A rejected or failed candidate worktree is retained in `/dev/shm/infraforge-daily-maintenance/<date>` until reboot or manual investigation. A successful or empty candidate worktree is removed, and cleanup failure is reported rather than hidden. If PR creation is ambiguous after push, the controller queries GitHub and otherwise attempts to delete the remote branch; any possible orphan is stated explicitly.
+A rejected or failed candidate worktree is retained in `/dev/shm/infraforge-daily-maintenance/<date>` until reboot or manual investigation. A successful or empty candidate worktree is removed, and cleanup failure is reported rather than hidden. If push or PR creation is ambiguous, rollback deletion uses an exact-SHA lease and can only remove the commit created by this run; a pre-existing or concurrently changed branch is preserved. Any possible orphan is stated explicitly.
 
 ## State and idempotency
 
@@ -136,8 +137,8 @@ A filesystem lock serializes launcher, worker, and reporter state transitions; a
 
 The public repository intentionally does not write private Hermes profile or cron state. Runtime installation is an explicit out-of-band operator action after the reviewed repository change is merged:
 
-1. create the dedicated `dailymaintainer` profile with `--no-skills`, configure only the selected model/provider authentication, and keep `skills.external_dirs` plus `terminal.credential_files` empty;
-2. configure and validate the canonical repository's fetch and push URL as `https://github.com/richeju/OrchestrationOasis.git`, then pre-pull the reviewed Hermes Docker backend image;
+1. create the dedicated `dailymaintainer` profile with `--no-skills`, configure only the selected provider authentication, and leave `config.yaml` absent or without any `terminal:` section;
+2. configure and validate the canonical repository's fetch and push URL as `https://github.com/richeju/OrchestrationOasis.git`, then pre-pull the controller's digest-pinned Hermes Docker image;
 3. install the exact documented Docker wrapper in `~/.hermes/bin/daily-maintenance/docker`, with both wrapper and parent directory mode `0700`;
 4. copy the reviewed controller source to the three private entry-point paths with mode `0700`;
 5. register exactly two private no-agent jobs at `0 10 * * *` and `0 11 * * *`;
