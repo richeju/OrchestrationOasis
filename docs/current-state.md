@@ -69,6 +69,14 @@ Sunday at 22:30, the host is rebooted Monday at 03:30 only when Debian's
 at 03:45. The implementation and safeguards are documented in
 [`weekly-conditional-reboot.md`](weekly-conditional-reboot.md).
 
+Daily repository maintenance is launched at 10:00 after the 08:00 security
+audit. Logs, container health, CI messages, issues, and documented debt are
+ranked as evidence for at most one low-risk bugfix or improvement. Work uses a
+`daily/*` branch and mandatory PR/check/scan gates; sensitive infrastructure
+changes remain human-approved. The bounded worker and reporting pipeline are
+documented in
+[`daily-repository-maintenance.md`](daily-repository-maintenance.md).
+
 ## Change rule
 
 A service moves from **Observed** or **Planned** to **Managed** only when its role
