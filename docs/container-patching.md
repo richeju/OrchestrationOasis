@@ -29,6 +29,14 @@ Defaults:
 
 They can be overridden for controlled tests with `HEALTH_TIMEOUT_SECONDS` and `HEALTH_POLL_SECONDS`.
 
+## Conditional reboot
+
+The patching job never reboots the host itself. When Debian leaves
+`/var/run/reboot-required`, the separate
+[weekly conditional reboot](weekly-conditional-reboot.md) workflow schedules a
+reboot on Monday at 03:30 and verifies recovery at 03:45. This separation keeps
+the patching report deliverable and prevents an unconditional weekly outage.
+
 ## Verification
 
 Run the isolated behavior tests:

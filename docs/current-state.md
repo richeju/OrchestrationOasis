@@ -63,6 +63,12 @@ snapshot with no lock and a complete application export. The host had no
 pending package updates but did report that a reboot was required; no reboot
 was performed by the audit.
 
+Weekly maintenance now separates mutation and recovery validation: patching runs
+Sunday at 22:30, the host is rebooted Monday at 03:30 only when Debian's
+`reboot-required` marker exists, and a silent-unless-needed verification runs
+at 03:45. The implementation and safeguards are documented in
+[`weekly-conditional-reboot.md`](weekly-conditional-reboot.md).
+
 ## Change rule
 
 A service moves from **Observed** or **Planned** to **Managed** only when its role
