@@ -29,6 +29,7 @@ test:
 	./scripts/tests/safety-gates.test.sh
 	./scripts/tests/repository-safety.test.sh
 	python3 ./scripts/tests/daily-security-audit.test.py
+	python3 ./scripts/tests/daily-repository-maintenance.test.py
 	python3 ./scripts/tests/weekly-conditional-reboot.test.py
 	./scripts/tests/container-patching.test.sh
 	./scripts/tests/service-roles.test.sh
