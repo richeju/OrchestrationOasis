@@ -112,9 +112,9 @@ The VPS applies only non-executing checks to model-authored content:
 - `git diff --check`;
 - deterministic secret-pattern rejection.
 
-The candidate is then created remotely as `daily/YYYY-MM-DD-maintenance` with a create-only `--force-with-lease` and opened as a PR. GitHub Actions runs `make check` and security scanning on GitHub-hosted `ubuntu-latest` runners. The worker never merges the PR, even if CI passes.
+The candidate is then pushed as `daily/YYYY-MM-DD-maintenance` and opened as a PR. GitHub Actions runs `make check` and security scanning on GitHub-hosted `ubuntu-latest` runners. The worker never merges the PR, even if CI passes.
 
-A rejected or failed candidate worktree is retained in `/dev/shm/infraforge-daily-maintenance/<date>` until reboot or manual investigation. A successful or empty candidate worktree is removed, and cleanup failure is reported rather than hidden. If push or PR creation is ambiguous, rollback deletion uses an exact-SHA lease and can only remove the commit created by this run; a pre-existing or concurrently changed branch is preserved. Any possible orphan is stated explicitly.
+A rejected or failed candidate worktree is retained in `/dev/shm/infraforge-daily-maintenance/<date>` until reboot or manual investigation. A successful or empty candidate worktree is removed, and cleanup failure is reported rather than hidden. The controller never deletes a remote branch: on ambiguous push or PR creation it preserves the branch and reports the possible orphan, avoiding destructive mutation of a pre-existing or concurrently changed ref.
 
 ## State and idempotency
 

@@ -755,19 +755,6 @@ def remote_branch_state(worktree: Path, branch: str) -> tuple[str | None, str | 
     return match.group(1), None
 
 
-def delete_owned_remote_branch(worktree: Path, branch: str, commit_id: str) -> bool:
-    deleted = run_command(
-        git_argv(
-            "push", "--no-verify",
-            f"--force-with-lease=refs/heads/{branch}:{commit_id}",
-            "origin", f":refs/heads/{branch}",
-        ),
-        cwd=worktree,
-        timeout=120,
-    )
-    return deleted.returncode == 0
-
-
 def publish_pr(paths: Paths, worktree: Path, base_sha: str, day: str, files: list[str]) -> tuple[str | None, str | None]:
     branch = f"daily/{day}-maintenance"
     staging_error = stage_without_filters(worktree, base_sha, files)
@@ -779,11 +766,7 @@ def publish_pr(paths: Paths, worktree: Path, base_sha: str, day: str, files: lis
     if commit_error or not commit_id:
         return None, commit_error or "identifiant du commit déterministe absent"
     push = run_command(
-        git_argv(
-            "push", "--no-verify", "-u",
-            f"--force-with-lease=refs/heads/{branch}:",
-            "origin", f"{commit_id}:refs/heads/{branch}",
-        ),
+        git_argv("push", "--no-verify", "-u", "origin", f"{commit_id}:refs/heads/{branch}"),
         cwd=worktree,
         timeout=120,
     )
@@ -792,9 +775,7 @@ def publish_pr(paths: Paths, worktree: Path, base_sha: str, day: str, files: lis
         if remote_error:
             return None, f"push non confirmé ; {remote_error} ; aucune suppression distante"
         if remote_commit == commit_id:
-            if delete_owned_remote_branch(worktree, branch, commit_id):
-                return None, "push non confirmé ; branche distante supprimée"
-            return None, "push non confirmé ; branche distante potentiellement orpheline"
+            return None, "push non confirmé ; commit présent sur branche distante conservée"
         if remote_commit:
             return None, "push refusé ; branche distante préexistante préservée"
         return None, "push impossible"
@@ -820,9 +801,7 @@ def publish_pr(paths: Paths, worktree: Path, base_sha: str, day: str, files: lis
             return recovered, None
         if lookup_error:
             return None, f"création de PR non confirmée ; {lookup_error} ; branche distante conservée"
-        if delete_owned_remote_branch(worktree, branch, commit_id):
-            return None, "création de PR non confirmée ; branche distante supprimée"
-        return None, "création de PR non confirmée ; branche distante potentiellement orpheline"
+        return None, "création de PR non confirmée ; branche distante conservée pour éviter toute suppression destructive"
     return url, None
 
 

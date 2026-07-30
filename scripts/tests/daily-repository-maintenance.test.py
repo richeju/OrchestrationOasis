@@ -307,13 +307,25 @@ class DailyMaintenanceTests(unittest.TestCase):
         self.assertIn("préexistante préservée", error or "")
         self.assertEqual(runner.call_count, 2)
 
-    def test_remote_rollback_uses_exact_sha_lease(self) -> None:
+    def test_pr_failure_never_deletes_remote_branch(self) -> None:
         commit_id = "c" * 40
-        with mock.patch.object(MODULE, "run_command", return_value=MODULE.CommandResult(0, "")) as runner:
-            self.assertTrue(MODULE.delete_owned_remote_branch(self.repo, "daily/test", commit_id))
-        argv = runner.call_args.args[0]
-        self.assertIn(f"--force-with-lease=refs/heads/daily/test:{commit_id}", argv)
-        self.assertIn(":refs/heads/daily/test", argv)
+        responses = iter(
+            [
+                MODULE.CommandResult(0, "push ok"),
+                MODULE.CommandResult(1, "gh failed"),
+                MODULE.CommandResult(0, "[]\n"),
+            ]
+        )
+        with mock.patch.object(MODULE, "stage_without_filters", return_value=None), mock.patch.object(
+            MODULE, "create_commit_without_hooks", return_value=(commit_id, None)
+        ), mock.patch.object(MODULE, "run_command", side_effect=lambda *_args, **_kwargs: next(responses)) as runner:
+            url, error = MODULE.publish_pr(
+                self.paths, self.repo, self.base_sha, "2026-07-30", ["docs/guide.md"]
+            )
+        self.assertIsNone(url)
+        self.assertIn("branche distante conservée", error or "")
+        all_argv = [call.args[0] for call in runner.call_args_list]
+        self.assertFalse(any(arg.startswith(":refs/heads/") for argv in all_argv for arg in argv))
 
     def test_report_is_deterministic_bounded_and_idempotent(self) -> None:
         now = dt.datetime(2026, 7, 30, 9, 0, tzinfo=dt.timezone.utc)
