@@ -89,6 +89,13 @@ tcp LISTEN 0 128 213.32.65.233:443 0.0.0.0:*
         self.assertNotIn("sensitive-lock-id", encoded)
         self.assertNotIn("raw log", encoded)
 
+    def test_ssh_parser_does_not_count_non_addresses_as_unique_ips(self):
+        summary = AUDIT.parse_ssh_activity(
+            "Failed password for account from definitely-not-an-address port 22 ssh2"
+        )
+        self.assertEqual(summary["failed_attempts_24h"], 1)
+        self.assertEqual(summary["unique_failed_ips_24h"], 0)
+
     def test_ufw_parser_requires_active_restrictive_defaults(self):
         summary = AUDIT.parse_ufw(
             "Status: active\nDefault: deny (incoming), allow (outgoing), disabled (routed)\n"
@@ -239,6 +246,7 @@ tcp LISTEN 0 128 213.32.65.233:443 0.0.0.0:*
         self.assertTrue(report["read_only"])
         self.assertEqual(report["errors"], [])
         self.assertEqual(report["host"]["pending_updates"], 1)
+        self.assertEqual(report["ssh"]["unique_failed_ips_24h"], 1)
         self.assertEqual(report["storage"]["journald_bytes"], 115657933)
         self.assertEqual(report["unifi"]["adopted_online"], 1)
         self.assertEqual(len(report["unifi"]["rogue_detections"]["active"]), 1)

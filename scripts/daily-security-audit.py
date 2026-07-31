@@ -215,9 +215,15 @@ def parse_ssh_activity(text: str) -> dict[str, int]:
         lowered = line.lower()
         if any(token in lowered for token in ("failed password", "invalid user", "authentication failure")):
             failures += 1
-            match = re.search(r"\bfrom\s+([0-9a-f:.]+)", line, re.I)
+            match = re.search(r"\bfrom\s+(\S+)", line, re.I)
             if match:
-                failed_ips.add(match.group(1))
+                candidate = match.group(1).strip("[]").split("%", 1)[0]
+                try:
+                    address = ipaddress.ip_address(candidate)
+                except ValueError:
+                    pass
+                else:
+                    failed_ips.add(str(address))
         if "accepted publickey" in lowered or "accepted password" in lowered:
             successes += 1
     return {
