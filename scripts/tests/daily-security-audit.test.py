@@ -151,15 +151,17 @@ tcp LISTEN 0 128 213.32.65.233:443 0.0.0.0:*
         ):
             mismatch.connect()
 
-        with (
-            mock.patch.dict(
-                AUDIT.os.environ,
-                {"UNIFI_API_KEY": "not-emitted", "UNIFI_HOST": "http://controller"},
-                clear=False,
-            ),
-            self.assertRaises(RuntimeError),
-        ):
-            AUDIT.unifi_get("/api/test")
+        for invalid_origin in ("http://controller", "https://controller/unexpected/path"):
+            with (
+                self.subTest(origin=invalid_origin),
+                mock.patch.dict(
+                    AUDIT.os.environ,
+                    {"UNIFI_API_KEY": "not-emitted", "UNIFI_HOST": invalid_origin},
+                    clear=False,
+                ),
+                self.assertRaises(RuntimeError),
+            ):
+                AUDIT.unifi_get("/api/test")
 
     def test_future_unifi_client_is_not_counted_as_new(self):
         now = 1_800_000_000.0

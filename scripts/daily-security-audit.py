@@ -400,6 +400,7 @@ def unifi_get(path: str) -> list[dict[str, Any]]:
         or not base.hostname
         or base.username
         or base.password
+        or base.path not in ("", "/")
         or base.query
         or base.fragment
     ):
