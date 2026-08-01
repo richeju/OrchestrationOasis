@@ -114,6 +114,7 @@ tcp LISTEN 0 128 213.32.65.233:443 0.0.0.0:*
             "fe80::1%bad/zone",
             "203.0.113.8:0",
             "203.0.113.8:65536",
+            f"203.0.113.8:{'9' * 5000}",
             "[2001:db8::1]:not-a-port",
         )
         for token in rejected:
@@ -140,6 +141,21 @@ tcp LISTEN 0 128 213.32.65.233:443 0.0.0.0:*
                 "unique_failed_ips_24h": 2,
                 "successful_logins_24h": 1,
             },
+        )
+
+    def test_ssh_source_prefers_last_rhost_then_last_valid_from(self):
+        self.assertEqual(
+            AUDIT.ssh_source_address(
+                "authentication failure rhost=192.0.2.1 rhost=203.0.113.8 "
+                "from 198.51.100.2"
+            ),
+            "203.0.113.8",
+        )
+        self.assertEqual(
+            AUDIT.ssh_source_address(
+                "Invalid user account from 192.0.2.1 from 198.51.100.2 port 22"
+            ),
+            "198.51.100.2",
         )
 
     def test_ufw_parser_requires_active_restrictive_defaults(self):

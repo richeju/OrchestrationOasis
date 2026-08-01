@@ -231,7 +231,7 @@ def normalize_ssh_address(token: str) -> str | None:
             else:
                 host, port = endpoint.groups()
 
-    if port is not None and not 1 <= int(port) <= 65535:
+    if port is not None and (len(port) > 5 or not 1 <= int(port) <= 65535):
         return None
 
     if "%" in host:
