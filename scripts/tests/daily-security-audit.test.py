@@ -89,12 +89,58 @@ tcp LISTEN 0 128 213.32.65.233:443 0.0.0.0:*
         self.assertNotIn("sensitive-lock-id", encoded)
         self.assertNotIn("raw log", encoded)
 
-    def test_ssh_parser_does_not_count_non_addresses_as_unique_ips(self):
-        summary = AUDIT.parse_ssh_activity(
-            "Failed password for account from definitely-not-an-address port 22 ssh2"
+    def test_ssh_address_normalization_accepts_only_well_formed_endpoints(self):
+        accepted = {
+            "203.0.113.8": "203.0.113.8",
+            "203.0.113.8,": "203.0.113.8",
+            "203.0.113.8:22": "203.0.113.8",
+            "2001:0db8::1": "2001:db8::1",
+            "[2001:db8::1]": "2001:db8::1",
+            "[2001:db8::1]:22": "2001:db8::1",
+            "fe80::1%eth0": "fe80::1",
+            "[fe80::1%eth0]:22;": "fe80::1",
+        }
+        for token, expected in accepted.items():
+            with self.subTest(token=token):
+                self.assertEqual(AUDIT.normalize_ssh_address(token), expected)
+
+        rejected = (
+            "definitely-not-an-address",
+            "[203.0.113.8",
+            "203.0.113.8]",
+            "203.0.113.8%eth0",
+            "fe80::1%",
+            "fe80::1%eth0%extra",
+            "fe80::1%bad/zone",
+            "203.0.113.8:0",
+            "203.0.113.8:65536",
+            "[2001:db8::1]:not-a-port",
         )
-        self.assertEqual(summary["failed_attempts_24h"], 1)
-        self.assertEqual(summary["unique_failed_ips_24h"], 0)
+        for token in rejected:
+            with self.subTest(token=token):
+                self.assertIsNone(AUDIT.normalize_ssh_address(token))
+
+    def test_ssh_parser_handles_pam_variants_and_uses_last_valid_from(self):
+        summary = AUDIT.parse_ssh_activity(
+            "\n".join(
+                (
+                    "authentication failure; rhost=203.0.113.8 user=account",
+                    "Invalid user from from 203.0.113.8 port 22 ssh2",
+                    "Failed password for account from [2001:db8::1]:22",
+                    "Failed password for account from 2001:0db8::1 port 22 ssh2",
+                    "Failed password for account from definitely-not-an-address port 22 ssh2",
+                    "Accepted publickey for account from 203.0.113.8 port 22 ssh2",
+                )
+            )
+        )
+        self.assertEqual(
+            summary,
+            {
+                "failed_attempts_24h": 5,
+                "unique_failed_ips_24h": 2,
+                "successful_logins_24h": 1,
+            },
+        )
 
     def test_ufw_parser_requires_active_restrictive_defaults(self):
         summary = AUDIT.parse_ufw(
