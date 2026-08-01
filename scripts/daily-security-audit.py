@@ -207,6 +207,63 @@ def parse_failed_units(text: str) -> list[str]:
     return [line.split()[0] for line in text.splitlines() if line.split()]
 
 
+def normalize_ssh_address(token: str) -> str | None:
+    token = token.rstrip(",;")
+    if not token:
+        return None
+
+    port: str | None = None
+    if token.startswith("["):
+        endpoint = re.fullmatch(r"\[([^\[\]]+)\](?::([0-9]+))?", token)
+        if not endpoint:
+            return None
+        host, port = endpoint.groups()
+    else:
+        if "[" in token or "]" in token:
+            return None
+        host = token
+        try:
+            ipaddress.ip_address(host)
+        except ValueError:
+            endpoint = re.fullmatch(r"([^:]+):([0-9]+)", host)
+            if not endpoint:
+                pass
+            else:
+                host, port = endpoint.groups()
+
+    if port is not None and (len(port) > 5 or not 1 <= int(port) <= 65535):
+        return None
+
+    if "%" in host:
+        if host.count("%") != 1:
+            return None
+        host, zone = host.split("%", 1)
+        if not zone or not re.fullmatch(r"[A-Za-z0-9_.-]+", zone):
+            return None
+        try:
+            address = ipaddress.ip_address(host)
+        except ValueError:
+            return None
+        if not isinstance(address, ipaddress.IPv6Address):
+            return None
+    else:
+        try:
+            address = ipaddress.ip_address(host)
+        except ValueError:
+            return None
+    return str(address)
+
+
+def ssh_source_address(line: str) -> str | None:
+    rhosts = re.findall(r"\brhost=(\S*)", line, re.I)
+    from_tokens = re.findall(r"(?=\bfrom\s+(\S+))", line, re.I)
+    for token in [*reversed(rhosts), *reversed(from_tokens)]:
+        address = normalize_ssh_address(token)
+        if address is not None:
+            return address
+    return None
+
+
 def parse_ssh_activity(text: str) -> dict[str, int]:
     failures = 0
     successes = 0
@@ -215,9 +272,9 @@ def parse_ssh_activity(text: str) -> dict[str, int]:
         lowered = line.lower()
         if any(token in lowered for token in ("failed password", "invalid user", "authentication failure")):
             failures += 1
-            match = re.search(r"\bfrom\s+([0-9a-f:.]+)", line, re.I)
-            if match:
-                failed_ips.add(match.group(1))
+            address = ssh_source_address(line)
+            if address is not None:
+                failed_ips.add(address)
         if "accepted publickey" in lowered or "accepted password" in lowered:
             successes += 1
     return {
