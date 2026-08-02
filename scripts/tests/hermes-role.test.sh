@@ -24,7 +24,17 @@ assert defaults["hermes_install_commit"] == ""
 assert defaults["hermes_allow_checkout_replacement"] is False
 assert defaults["hermes_installer_checksum"].startswith("sha256:")
 assert "/e0240d7bf7ce0d665417d45de0bfa9a65cb0ab48/" in defaults["hermes_installer_url"]
-assert production["hermes_user"] == "debian"
+assert production["hermes_user"] == "hermes"
+assert production["hermes_group"] == "hermes"
+assert production["hermes_home"] == "/home/hermes/.hermes"
+assert production["hermes_install_dir"] == "/home/hermes/.hermes/hermes-agent"
+assert production["hermes_binary_path"] == "/home/hermes/.local/bin/hermes"
+assert production["hermes_required_private_files"] == [
+    "/home/hermes/.hermes/config.yaml",
+    "/home/hermes/.hermes/.env",
+    "/home/hermes/.hermes/auth.json",
+    "/home/hermes/.hermes/whatsapp/session/creds.json",
+]
 assert production["hermes_manage_installation"] is False
 for key in defaults:
     lowered = key.lower()

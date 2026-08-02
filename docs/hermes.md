@@ -2,8 +2,13 @@
 
 The `hermes` role manages an existing per-user Hermes Agent installation and
 its messaging gateway without placing credentials in Git. Production uses the
-`debian` account, `/home/debian/.hermes`, and the user unit
-`hermes-gateway.service`.
+dedicated internal Debian host, the `hermes` account, `/home/hermes/.hermes`,
+and the user unit `hermes-gateway.service`.
+
+Hermes no longer runs on the public Infraforge/OVH VPS and does not depend on
+the former site-to-site OpenVPN path. The internal host reaches WhatsApp and
+provider APIs through outbound connections only. Its address belongs in the
+ignored production inventory, never in this repository.
 
 ## Safety contract
 
@@ -37,8 +42,7 @@ ansible-playbook -i inventories/production/hosts.yml \
 ```
 
 The second convergence must report `changed=0`. Confirm the gateway afterwards
-from an SSH session on the VPS as the configured Hermes account (`debian` in
-production):
+from a session on the internal host as the configured `hermes` account:
 
 ```bash
 hermes config check
@@ -94,3 +98,7 @@ Hermes persistent data is backed up by the Restic application hook documented
 in [restic.md](restic.md). The role owns service orchestration and private-file
 metadata only; it does not replace config, OAuth state, memories, sessions,
 skills, cron jobs, or the WhatsApp session.
+
+The old VPS copy is not a failover peer. Keep its Hermes gateway disabled so
+two hosts cannot compete for the same WhatsApp session. Retire its credentials
+after the internal host backup and restore path has been validated.
