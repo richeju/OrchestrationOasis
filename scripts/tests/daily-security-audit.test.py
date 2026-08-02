@@ -36,6 +36,19 @@ tcp LISTEN 0 128 213.32.65.233:443 0.0.0.0:*
             ],
         )
 
+    def test_container_parser_skips_valid_json_that_is_not_an_object(self):
+        sample = "\n".join(
+            (
+                '{"Names":"app","State":"running","Status":"Up"}',
+                '["unexpected"]',
+                'null',
+            )
+        )
+        self.assertEqual(
+            AUDIT.parse_container_rows(sample),
+            [{"name": "app", "state": "running", "status": "Up"}],
+        )
+
     def test_rogue_recency_supports_seconds_and_milliseconds(self):
         now = 1_800_000_000.0
         rows = [

@@ -26,7 +26,7 @@ Last verified: 2026-07-22 from the Infraforge VPS.
 | Semaphore | Docker Compose in `/home/debian/semaphore` | VPN `10.78.0.1:3001` | Migrated and managed |
 | OpenBao | Docker Compose in `/home/debian/openbao` | VPN TLS `10.78.0.1:8200` | Partial; automated Raft snapshots are managed, isolated full restore remains |
 | Restic/rclone | Native root-only scripts, application-consistent export hook and systemd timers | No listening port | Managed backup pipeline; latest read-only audit healthy, full disposable offsite restore automation remains backlog |
-| Hermes Agent | Per-user Python installation and user systemd messaging gateway | Outbound WhatsApp gateway | Partial; live role and application-consistent backup/transaction safeguards verified, second-convergence proof remains pending |
+| Hermes Agent | Dedicated internal Debian host; `hermes` user and user-systemd gateway | Internal management; outbound-only WhatsApp and provider connections | Partial; internal runtime verified 2026-08-02, role updated for the local paths, backup/restore and second-convergence proof remain pending |
 | NetBox | Official netbox-docker stack in `/home/debian/netbox`, including worker, PostgreSQL and Valkey | VPN `10.78.0.1:8000` | Observed only |
 | Authentik | Docker Compose in `/home/debian/authentik` | VPN `10.78.0.1:9000` | Observed only |
 | Prometheus | Not detected | None | Planned |
@@ -41,6 +41,22 @@ with the official production topology and is disabled unless
 role to update the current production NetBox. A future migration must first
 model the official stack, backup PostgreSQL and media, and exercise restore and
 rollback tests.
+
+## Internal Hermes boundary
+
+Hermes moved off the Infraforge/OVH VPS to a dedicated host on the trusted
+internal network. The production role now targets `hermes` with state under
+`/home/hermes/.hermes`. The messaging gateway is enabled as a user systemd
+service and linger is enabled, so it remains available without an interactive
+login.
+
+The former `Allow Hermes VPN to LAN` UniFi policy and its derived return rule
+were removed on 2026-08-02. No UniFi VPN server remains for that path. The
+generic UniFi VPN zone was deliberately retained for unrelated future tunnels.
+
+This migration applies to Hermes only. The read-only Infraforge VPS audit and
+the `10.78.0.1` service endpoints below still describe the other services on
+that VPS until each service is separately migrated or retired.
 
 ## Read-only VPS audit
 
