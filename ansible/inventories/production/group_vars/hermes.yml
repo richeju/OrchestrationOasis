@@ -1,9 +1,12 @@
 ---
-hermes_user: debian
-hermes_group: debian
-hermes_home: /home/debian/.hermes
-hermes_install_dir: /home/debian/.hermes/hermes-agent
-hermes_binary_path: /home/debian/.local/bin/hermes
+# Hermes moved from the public Infraforge/OVH VPS to the dedicated internal
+# Debian host. Keep host addressing in the ignored production inventory; these
+# versioned variables describe only the non-secret runtime contract.
+hermes_user: hermes
+hermes_group: hermes
+hermes_home: /home/hermes/.hermes
+hermes_install_dir: /home/hermes/.hermes/hermes-agent
+hermes_binary_path: /home/hermes/.local/bin/hermes
 hermes_manage_installation: false
 hermes_migrate_config: false
 hermes_manage_gateway: true
@@ -12,7 +15,7 @@ hermes_gateway_started: true
 hermes_enable_linger: true
 hermes_verify_runtime: true
 hermes_required_private_files:
-  - /home/debian/.hermes/config.yaml
-  - /home/debian/.hermes/.env
-  - /home/debian/.hermes/auth.json
-  - /home/debian/.hermes/whatsapp/session/creds.json
+  - /home/hermes/.hermes/config.yaml
+  - /home/hermes/.hermes/.env
+  - /home/hermes/.hermes/auth.json
+  - /home/hermes/.hermes/whatsapp/session/creds.json
