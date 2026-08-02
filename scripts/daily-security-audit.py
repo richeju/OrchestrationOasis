@@ -311,6 +311,8 @@ def parse_container_rows(text: str) -> list[dict[str, str]]:
             item = json.loads(line)
         except json.JSONDecodeError:
             continue
+        if not isinstance(item, dict):
+            continue
         rows.append(
             {
                 "name": str(item.get("Names", "")),
